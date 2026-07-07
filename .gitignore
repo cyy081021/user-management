@@ -51,3 +51,4 @@ instance/
 .claude.json*
 .claude.json.bak
 .openclaw/
+run.sh
