@@ -26,3 +26,4 @@ ssl/key.pem
 
 # Flask
 instance/
+.openclaw/

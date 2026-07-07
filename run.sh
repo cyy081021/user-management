@@ -8,6 +8,15 @@
 
 set -e
 
+# 加载环境变量（密码等敏感信息）
+ENV_FILE="$(dirname "$0")/.env"
+if [ -f "$ENV_FILE" ]; then
+    echo "[配置] 加载 $ENV_FILE"
+    set -a
+    source "$ENV_FILE"
+    set +a
+fi
+
 MODE="${1:-dev}"
 APP_DIR="/root"
 SSL_DIR="/root/ssl"

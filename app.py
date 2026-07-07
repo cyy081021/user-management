@@ -42,6 +42,48 @@ limiter = Limiter(
 )
 
 # ---------------------------------------------------------------------------
+# 从环境变量读取密码（绝不硬编码！）
+# ---------------------------------------------------------------------------
+def _get_env_password(key, prompt_name):
+    """从环境变量获取密码，缺失时抛错"""
+    password = os.environ.get(key)
+    if not password:
+        raise RuntimeError(
+            f"环境变量 {key} 未设置！请先设置 {prompt_name} 的密码，例如:\n"
+            f"  export {key}=your_password\n"
+            f"  或通过 .env 文件加载"
+        )
+    return password
+
+
+_admin_password = _get_env_password("ADMIN_PASSWORD", "管理员(admin)")
+_alice_password = _get_env_password("ALICE_PASSWORD", "普通用户(alice)")
+
+
+# ---------------------------------------------------------------------------
+# 用户数据库（密码以 PBKDF2 哈希存储，源码中无明文密码）
+# ---------------------------------------------------------------------------
+USERS = {
+    "admin": {
+        "username": "admin",
+        "password": generate_password_hash(_admin_password),
+        "role": "admin",
+        "email": "admin@example.com",
+        "phone": "13800138000",
+        "balance": 99999,
+    },
+    "alice": {
+        "username": "alice",
+        "password": generate_password_hash(_alice_password),
+        "role": "user",
+        "email": "alice@example.com",
+        "phone": "13900139001",
+        "balance": 100,
+    },
+}
+
+
+# ---------------------------------------------------------------------------
 # 密码复杂度校验函数
 # ---------------------------------------------------------------------------
 def check_password_strength(password):
@@ -56,53 +98,6 @@ def check_password_strength(password):
     if not any(c.isdigit() for c in password):
         errors.append("密码需要包含数字")
     return (len(errors) == 0, "；".join(errors) if errors else "")
-
-
-def validate_user_passwords():
-    """启动时检查预设用户密码的复杂度"""
-    for username, info in USERS.items():
-        weak_passwords = {"[PASSWORD-REDACTED]", "[PASSWORD-REDACTED]", "password123", "12345678",
-                          "admin", "test1234", "passw0rd", "qwerty123"}
-        plain = info.get("_plain_password", info["password"])
-        if plain in weak_passwords:
-            logger.warning("用户 '%s' 使用了弱密码（常见密码），建议修改", username)
-
-
-# ---------------------------------------------------------------------------
-# 用户数据库（密码以 PBKDF2 哈希存储）
-# ---------------------------------------------------------------------------
-_raw_passwords = {
-    "admin": "[PASSWORD-REDACTED]",
-    "alice": "[PASSWORD-REDACTED]",
-}
-
-USERS = {
-    "admin": {
-        "username": "admin",
-        "password": generate_password_hash(_raw_passwords["admin"]),
-        "role": "admin",
-        "email": "admin@example.com",
-        "phone": "13800138000",
-        "balance": 99999,
-        "_plain_password": _raw_passwords["admin"],  # 仅用于启动时检查，不对外暴露
-    },
-    "alice": {
-        "username": "alice",
-        "password": generate_password_hash(_raw_passwords["alice"]),
-        "role": "user",
-        "email": "alice@example.com",
-        "phone": "13900139001",
-        "balance": 100,
-        "_plain_password": _raw_passwords["alice"],
-    },
-}
-
-# 启动时记录弱密码警告
-validate_user_passwords()
-
-# 清理内部明文密码字段（只保留哈希）
-for u in USERS.values():
-    u.pop("_plain_password", None)
 
 
 def get_safe_user_info(username):
