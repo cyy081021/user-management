@@ -2,7 +2,7 @@
 Gunicorn 生产配置
 
 使用方式：
-  gunicorn -c gunicorn_config.py app:app
+  gunicorn -c deployment/gunicorn.conf.py wsgi:app
 """
 import os
 import multiprocessing
@@ -28,6 +28,12 @@ loglevel = "info"
 # 守护进程
 daemon = False
 
-# SSL（可选，启用后 Flask 层不再需要 ssl_context）
-# certfile = "/root/ssl/cert.pem"
-# keyfile = "/root/ssl/key.pem"
+# 隐藏 Server 头中的版本信息
+server_name = "UserManagement"
+# 禁用 gunicorn 版本在 Server 头中暴露
+# (配合 wsgi.py 中的 WSGIRequestHandler monkey-patch 共同生效)
+os.environ["SERVER_SOFTWARE"] = "UserManagement"
+
+# SSL（可选）
+# certfile = "/path/to/cert.pem"
+# keyfile = "/path/to/key.pem"

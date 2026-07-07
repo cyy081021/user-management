@@ -14,6 +14,14 @@ import os
 import sys
 import logging
 
+# ---------------------------------------------------------------------------
+# 隐藏 Server 头中的版本信息（安全：防止攻击者针对性利用已知 CVE）
+# ---------------------------------------------------------------------------
+from werkzeug.serving import WSGIRequestHandler
+
+WSGIRequestHandler.server_version = "UserManagement"
+WSGIRequestHandler.sys_version = ""  # 不暴露 Python 版本
+
 logger = logging.getLogger(__name__)
 
 from app import create_app

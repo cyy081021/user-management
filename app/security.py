@@ -190,4 +190,8 @@ def add_security_headers(response):
         "default-src 'self'; style-src 'self' 'unsafe-inline'"
     )
     response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    # 敏感页面禁止浏览器缓存
+    if response.content_type and "text/html" in response.content_type:
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
     return response
