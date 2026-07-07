@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 虚拟环境
+venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# 日志
+*.log
+/tmp/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# SSL 私钥（证书可以保留）
+ssl/key.pem
+
+# Flask
+instance/
