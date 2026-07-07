@@ -53,3 +53,4 @@ instance/
 .openclaw/
 run.sh
 dump.rdb
+dump.rdb
