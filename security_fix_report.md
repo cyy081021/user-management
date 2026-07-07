@@ -33,7 +33,7 @@
 | **修复操作** | 删除 `login.html` 顶部的调试注释，其中写死了 `admin / [PASSWORD-REDACTED]` |
 | **修复前** | `<!-- 调试信息 - 默认管理员账号 用户名: admin 密码: [PASSWORD-REDACTED] -->` |
 | **修复后** | 注释已移除 |
-| **附带变更** | 同时将密码从弱密码 `[PASSWORD-REDACTED]` / `[PASSWORD-REDACTED]` 更新为复杂度合规的密码：`[PASSWORD-REDACTED]` / `[PASSWORD-REDACTED]` |
+| **附带变更** | 同时将弱密码升级为复杂度合规的强密码 |
 
 ---
 
@@ -213,12 +213,7 @@ app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # CSRF 防护
 
 ## 新账号密码
 
-原弱密码已升级为符合复杂度要求的密码：
-
-| 用户 | 新密码 | 角色 | 余额 |
-|------|--------|------|------|
-| `admin` | `[PASSWORD-REDACTED]` | admin | 99999 |
-| `alice` | `[PASSWORD-REDACTED]` | user | 100 |
+原弱密码已升级为符合复杂度要求的密码（通过环境变量设置，不在此公开）。
 
 > 密码规则：≥8 位，含大写字母、小写字母、数字
 
@@ -235,7 +230,6 @@ cd /root
 ```
 
 当前运行模式：**HTTP + Flask 开发服务器**
-物理机访问：`http://192.168.163.133:5000`
 
 ---
 

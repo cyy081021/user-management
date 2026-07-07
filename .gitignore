@@ -27,3 +27,27 @@ ssl/key.pem
 # Flask
 instance/
 .openclaw/
+
+# 系统文件（防止 git add -A 误加）
+.bashrc
+.bashrc.original
+.bash_history
+.profile
+.zshrc
+.zsh_history
+.viminfo
+.face
+.face.icon
+.gitconfig
+.lesshst
+.ssh/
+.cache/
+.config/
+.local/
+.npm/
+.claude/
+.claude-web-ui/
+.claude.bak/
+.claude.json*
+.claude.json.bak
+.openclaw/
