@@ -38,14 +38,15 @@ def try_start_with_password(admin_pw, alice_pw, label):
     env = os.environ.copy()
     env["ADMIN_PASSWORD"] = admin_pw
     env["ALICE_PASSWORD"] = alice_pw
-    env["SECRET_KEY"] = "test-secret-key-for-testing-only-123"
+    env["SECRET_KEY"] = "test-secret-key-32chars-min-for-testing!"
+    env["FLASK_HTTPS"] = "0"
     proc = subprocess.run(
         [sys.executable, "-c", """
 import sys, os
 os.environ['FLASK_HTTPS'] = '0'
-# 只导入 app 看是否启动
 try:
-    import app
+    from app import create_app
+    app = create_app()
     print('START_OK')
 except SystemExit:
     print('EXIT_FAIL')
