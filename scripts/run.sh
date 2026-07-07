@@ -48,7 +48,7 @@ case "$MODE" in
     echo "[提示] 请配置 Nginx 反向代理对外提供服务（参考 deployment/nginx.conf.example）"
     mkdir -p /var/log/user-mgmt 2>/dev/null || true
     cd "$PROJECT_ROOT"
-    gunicorn \
+    APP_ENV=production gunicorn \
         --bind 127.0.0.1:5000 \
         --workers "$(($(nproc) * 2 + 1))" \
         --timeout 30 \
@@ -70,7 +70,7 @@ case "$MODE" in
     echo "[启动] Gunicorn 生产服务器 (HTTPS, 0.0.0.0:5000)"
     mkdir -p /var/log/user-mgmt 2>/dev/null || true
     cd "$PROJECT_ROOT"
-    gunicorn \
+    APP_ENV=production gunicorn \
         --bind 0.0.0.0:5000 \
         --workers "$(($(nproc) * 2 + 1))" \
         --timeout 30 \

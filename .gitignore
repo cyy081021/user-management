@@ -52,3 +52,4 @@ instance/
 .claude.json.bak
 .openclaw/
 run.sh
+dump.rdb

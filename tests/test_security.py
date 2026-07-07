@@ -156,14 +156,14 @@ except (requests.ConnectionError, ValueError):
 # =============================================================
 print("\n━━━ 测试 7：生产模式不暴露公网 ━━━")
 
-# 检查 run.sh 中 prod 是否绑定 127.0.0.1
+# 检查 scripts/run.sh 中 prod 是否绑定 127.0.0.1
 try:
-    with open("/root/run.sh") as f:
+    with open("/root/scripts/run.sh") as f:
         content = f.read()
-    prod_binds_127 = "--bind 127.0.0.1:5000" in content
-    test("生产模式仅绑定 127.0.0.1", prod_binds_127)
+    prod_binds_127 = "--bind 127.0.0.1:5000" in content and "APP_ENV=production" in content
+    test("生产模式仅绑定 127.0.0.1 + APP_ENV=production", prod_binds_127)
 except FileNotFoundError:
-    test("生产模式仅绑定 127.0.0.1", False, "run.sh 不存在")
+    test("生产模式仅绑定 127.0.0.1 + APP_ENV=production", False, "scripts/run.sh 不存在")
 
 # =============================================================
 # 汇总

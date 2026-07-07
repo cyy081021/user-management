@@ -64,7 +64,7 @@ cp .env.example .env
 - 占位密码拒绝启动
 - CSRF 全局保护
 - Redis 共享限流（多 worker 协同）
-- 账号锁定：连续 5 次失败 → 锁定 15 分钟
+- 渐进延迟：登录失败越多等待越久（1s→60s），按 IP+用户名分桶，不暴露锁定状态
 - 防用户枚举随机延迟
 - Session 安全（HttpOnly + SameSite + Secure）
 - 安全响应头（HSTS、CSP 等 6 项）
