@@ -1,6 +1,19 @@
 # 用户信息管理平台
 
-一个基于 Flask 的用户管理平台，具备登录/登出、用户信息展示功能，经过多轮安全加固。
+一个基于 Flask 的用户管理平台，具备用户注册、登录/登出、用户信息展示和搜索功能。
+
+> ⚠️ **教学演示项目**：部分功能（注册、搜索）使用 `f-string` 拼接 SQL 语句，
+> 演示 **SQL 注入漏洞** 原理。请勿直接用于生产环境。
+
+## 📋 功能
+
+| 功能 | 路由 | 说明 |
+|------|------|------|
+| 用户注册 | `GET/POST /register` | 写入 SQLite `users` 表（f-string 拼接 SQL） |
+| 用户登录 | `GET/POST /login` | 密码 PBKDF2 哈希校验 |
+| 用户搜索 | `GET /search` 或 `/?keyword=` | 模糊匹配用户名/邮箱（f-string 拼接 SQL） |
+| 用户信息 | `GET /` | 展示当前用户信息 |
+| 健康检查 | `GET /health` | Redis 状态检查 |
 
 ## 目录结构
 
@@ -11,17 +24,20 @@ user-management/
 │   ├── routes.py                 # HTTP 路由
 │   ├── auth.py                   # 认证逻辑
 │   ├── security.py               # 安全工具
-│   └── users.py                  # 用户数据
+│   ├── users.py                  # 内存用户数据
+│   └── database.py               # SQLite 数据库操作
 ├── wsgi.py                       # WSGI 入口
 ├── templates/                    # Jinja2 模板
 │   ├── base.html
 │   ├── index.html
-│   └── login.html
+│   ├── login.html
+│   └── register.html
 ├── static/
 │   └── css/
 │       └── style.css
 ├── tests/
 │   └── test_security.py          # 安全测试
+├── data/                         # SQLite 数据库文件
 ├── docs/security/
 │   ├── security-fix-report.md
 │   └── password-security-review-v3.md
@@ -52,6 +68,9 @@ pip install -r requirements.txt
 cp .env.example .env
 # 编辑 .env，用密码管理器生成 12 位以上强密码
 
+# 确保 Redis 在运行
+redis-server --daemonize yes
+
 ./scripts/run.sh
 # 或
 ./scripts/run.sh prod    # 生产模式
@@ -67,8 +86,19 @@ cp .env.example .env
 - 渐进延迟：登录失败越多等待越久（1s→60s），按 IP+用户名分桶，不暴露锁定状态
 - 防用户枚举随机延迟
 - Session 安全（HttpOnly + SameSite + Secure）
-- 安全响应头（HSTS、CSP 等 6 项）
+- 安全响应头（HSTS、CSP、Cache-Control 等）
 - 生产模式仅绑定 127.0.0.1
+- 生产模式下强制 SECRET_KEY 配置
+- Server 头不暴露版本信息
+- Git 历史已清除泄露密码（filter-repo）
+
+## ⚠️ 已知安全缺陷（演示用）
+
+| 缺陷 | 位置 | 说明 |
+|------|------|------|
+| SQL 注入 | `register`、`search` 路由 | 使用 f-string 拼接 SQL，未做过滤转义 |
+| 明文密码 | `database.py` 默认用户 | admin/admin123、alice/alice2025 |
+| 无注册校验 | `register` 路由 | 无密码强度、重复检查 |
 
 详见 [docs/security/security-fix-report.md](docs/security/security-fix-report.md)
 
@@ -77,15 +107,7 @@ cp .env.example .env
 见 [requirements.txt](requirements.txt)，核心依赖：
 
 - Flask 3.1、Werkzeug 3.1、Flask-WTF、Flask-Limiter
-- Redis、Gunicorn
-
-## 🔖 版本
-
-| 版本 | 说明 |
-|:----:|------|
-| v1.0 | 初始安全加固 |
-| v2.0 | 密码移入环境变量 |
-| v3.0 | 12 项安全改进 + 模块化重构 |
+- Redis、Gunicorn、SQLite3
 
 ## 🏭 生产部署
 
