@@ -176,6 +176,12 @@ a {
     color: #cf1322;
 }
 
+.alert-success {
+    background-color: #f6ffed;
+    border: 1px solid #b7eb8f;
+    color: #389e0d;
+}
+
 /* 用户信息表格 */
 .user-info {
     margin-bottom: 24px;
@@ -214,4 +220,66 @@ a {
     margin-top: 16px;
     font-size: 13px;
     color: #999;
+}
+
+/* 搜索区域 */
+.search-section {
+    margin-bottom: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.search-form {
+    margin-top: 12px;
+}
+
+.search-group {
+    display: flex;
+    gap: 8px;
+}
+
+.search-group input[type="text"] {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #d9d9d9;
+    border-radius: 6px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.search-group input[type="text"]:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+/* 搜索结果 */
+.search-results {
+    margin-bottom: 24px;
+}
+
+.search-table {
+    margin-top: 8px;
+}
+
+.search-table thead th {
+    padding: 10px 12px;
+    font-weight: 600;
+    color: #555;
+    background-color: #fafafa;
+    border-bottom: 2px solid #e8e8e8;
+    text-align: left;
+}
+
+.search-table tbody td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    color: #333;
+}
+
+.no-results {
+    color: #999;
+    text-align: center;
+    padding: 20px;
+    font-size: 14px;
 }

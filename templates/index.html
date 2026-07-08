@@ -31,6 +31,46 @@
         </table>
     </div>
 
+    <div class="search-section">
+        <h3>搜索用户</h3>
+        <form method="GET" action="/" class="search-form">
+            <div class="search-group">
+                <input type="text" id="keyword" name="keyword" placeholder="输入用户名或邮箱搜索..." value="{{ keyword or '' }}">
+                <button type="submit" class="btn btn-primary">搜索</button>
+            </div>
+        </form>
+    </div>
+
+    {% if search_results is not none %}
+    <div class="search-results">
+        {% if search_results %}
+        <h3>搜索结果（共 {{ search_results|length }} 条）</h3>
+        <table class="info-table search-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>用户名</th>
+                    <th>邮箱</th>
+                    <th>手机</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in search_results %}
+                <tr>
+                    <td>{{ row.id }}</td>
+                    <td>{{ row.username }}</td>
+                    <td>{{ row.email }}</td>
+                    <td>{{ row.phone }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="no-results">无搜索结果</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
     <a href="/logout" class="btn btn-danger">退出登录</a>
 </div>
 {% else %}

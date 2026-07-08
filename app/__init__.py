@@ -30,6 +30,7 @@ from app.security import (
     add_security_headers,
 )
 from app.users import _init_users
+from app.database import init_db
 from app.routes import main_bp
 
 logger = logging.getLogger(__name__)
@@ -99,6 +100,9 @@ def create_app():
     # 初始化 Redis & 用户数据
     init_redis(redis_url)
     _init_users(admin_pw, alice_pw)
+
+    # 初始化 SQLite 数据库
+    init_db()
 
     # 清除明文密码变量
     admin_pw = alice_pw = None  # noqa
