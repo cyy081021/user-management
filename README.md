@@ -2,8 +2,7 @@
 
 一个基于 Flask 的用户管理平台，具备用户注册、登录/登出、用户信息展示和搜索功能。
 
-> ⚠️ **教学演示项目**：部分功能（注册、搜索）使用 `f-string` 拼接 SQL 语句，
-> 演示 **SQL 注入漏洞** 原理。请勿直接用于生产环境。
+所有 SQL 查询使用参数化查询，防止 SQL 注入。
 
 ## 📋 功能
 
@@ -91,14 +90,6 @@ redis-server --daemonize yes
 - 生产模式下强制 SECRET_KEY 配置
 - Server 头不暴露版本信息
 - Git 历史已清除泄露密码（filter-repo）
-
-## ⚠️ 已知安全缺陷（演示用）
-
-| 缺陷 | 位置 | 说明 |
-|------|------|------|
-| SQL 注入 | `register`、`search` 路由 | 使用 f-string 拼接 SQL，未做过滤转义 |
-| 明文密码 | `database.py` 默认用户 | admin/admin123、alice/alice2025 |
-| 无注册校验 | `register` 路由 | 无密码强度、重复检查 |
 
 详见 [docs/security/security-fix-report.md](docs/security/security-fix-report.md)
 

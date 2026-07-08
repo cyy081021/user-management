@@ -1,5 +1,5 @@
 """
-路由模块 — 所有 HTTP 路由定义
+路由模块 — 所有 HTTP 路由定义（使用参数化查询，修复 SQL 注入）
 """
 import logging
 from flask import Blueprint, render_template, request, redirect, session
@@ -18,22 +18,18 @@ def index():
     username = session.get("username")
     user_info = get_safe_user_info(username)
 
-    # 搜索功能
+    # 搜索功能（使用参数化查询）
     keyword = request.args.get("keyword", "").strip()
     search_results = None
-    sql = None
     if keyword:
         conn = get_db()
         cursor = conn.cursor()
-        # 使用 f-string 拼接 SQL（演示 SQL 注入漏洞）
-        sql = f"SELECT id, username, email, phone FROM users WHERE username LIKE '%{keyword}%' OR email LIKE '%{keyword}%'"
-        logger.info("[SQL] %s", sql)
-        try:
-            cursor.execute(sql)
-            search_results = [dict(row) for row in cursor.fetchall()]
-        except Exception as e:
-            logger.error("[SQL ERROR] %s", e)
-            search_results = []
+        like_pattern = f"%{keyword}%"
+        cursor.execute(
+            "SELECT id, username, email, phone FROM users WHERE username LIKE ? OR email LIKE ?",
+            (like_pattern, like_pattern),
+        )
+        search_results = [dict(row) for row in cursor.fetchall()]
         conn.close()
 
     return render_template(
@@ -42,7 +38,6 @@ def index():
         user=user_info,
         keyword=keyword,
         search_results=search_results,
-        search_sql=sql,
     )
 
 
@@ -70,17 +65,18 @@ def register():
 
         conn = get_db()
         cursor = conn.cursor()
-        # 使用 f-string 拼接 SQL（演示 SQL 注入漏洞）
-        sql = f"INSERT INTO users (username, password, email, phone) VALUES ('{username}', '{password}', '{email}', '{phone}')"
-        logger.info("[SQL] %s", sql)
+        # 使用参数化查询插入用户
         try:
-            cursor.execute(sql)
+            cursor.execute(
+                "INSERT INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)",
+                (username, password, email, phone),
+            )
             conn.commit()
             logger.info("[注册] 用户 '%s' 注册成功", username)
             conn.close()
             return render_template("login.html", message="注册成功，请登录")
         except Exception as e:
-            logger.error("[SQL ERROR] %s", e)
+            logger.error("[注册错误] %s", e)
             conn.close()
             return render_template("register.html", error=f"注册失败：{e}")
 
@@ -95,15 +91,12 @@ def search():
 
     conn = get_db()
     cursor = conn.cursor()
-    # 使用 f-string 拼接 SQL（演示 SQL 注入漏洞）
-    sql = f"SELECT id, username, email, phone FROM users WHERE username LIKE '%{keyword}%' OR email LIKE '%{keyword}%'"
-    logger.info("[SQL] %s", sql)
-    try:
-        cursor.execute(sql)
-        results = [dict(row) for row in cursor.fetchall()]
-    except Exception as e:
-        logger.error("[SQL ERROR] %s", e)
-        results = []
+    like_pattern = f"%{keyword}%"
+    cursor.execute(
+        "SELECT id, username, email, phone FROM users WHERE username LIKE ? OR email LIKE ?",
+        (like_pattern, like_pattern),
+    )
+    results = [dict(row) for row in cursor.fetchall()]
     conn.close()
 
     username = session.get("username")
@@ -114,7 +107,6 @@ def search():
         user=user_info,
         keyword=keyword,
         search_results=results,
-        search_sql=sql,
     )
 
 

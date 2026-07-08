@@ -1,5 +1,5 @@
 """
-数据库模块 — SQLite 操作（演示用，含 SQL 注入漏洞）
+数据库模块 — SQLite 操作（参数化查询，安全）
 """
 import sqlite3
 import os
@@ -32,15 +32,15 @@ def init_db():
         )
     """)
 
-    # 插入默认用户（使用 INSERT OR IGNORE 防止重复）
+    # 插入默认用户（使用参数化查询，防止 SQL 注入）
     default_users = [
         ("admin", "admin123", "admin@example.com", "13800138000"),
         ("alice", "alice2025", "alice@example.com", "13900139001"),
     ]
     for u, p, e, ph in default_users:
         cursor.execute(
-            f"INSERT OR IGNORE INTO users (username, password, email, phone) "
-            f"VALUES ('{u}', '{p}', '{e}', '{ph}')"
+            "INSERT OR IGNORE INTO users (username, password, email, phone) VALUES (?, ?, ?, ?)",
+            (u, p, e, ph),
         )
 
     conn.commit()
