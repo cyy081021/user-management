@@ -54,3 +54,4 @@ instance/
 run.sh
 dump.rdb
 dump.rdb
+data/
