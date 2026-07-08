@@ -8,9 +8,9 @@
 
 | 功能 | 路由 | 说明 |
 |------|------|------|
-| 用户注册 | `GET/POST /register` | 写入 SQLite `users` 表（f-string 拼接 SQL） |
+| 用户注册 | `GET/POST /register` | 写入 SQLite `users` 表（参数化查询） |
 | 用户登录 | `GET/POST /login` | 密码 PBKDF2 哈希校验 |
-| 用户搜索 | `GET /search` 或 `/?keyword=` | 模糊匹配用户名/邮箱（f-string 拼接 SQL） |
+| 用户搜索 | `GET /search` 或 `/?keyword=` | 模糊匹配用户名/邮箱（参数化查询） |
 | 用户信息 | `GET /` | 展示当前用户信息 |
 | 健康检查 | `GET /health` | Redis 状态检查 |
 
