@@ -78,6 +78,7 @@ def create_app():
     app.config["SESSION_COOKIE_SECURE"] = https_enabled or is_production
     app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(hours=2)
     app.config["WTF_CSRF_TIME_LIMIT"] = 3600
+    app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024  # 16MB
 
     logger.info(
         "Session 配置: Secure=%s, HttpOnly=True, SameSite=Lax, 有效期=2h",

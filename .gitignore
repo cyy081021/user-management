@@ -55,3 +55,5 @@ run.sh
 dump.rdb
 dump.rdb
 data/
+internal-system/
+static/uploads/
