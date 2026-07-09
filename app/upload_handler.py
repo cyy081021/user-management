@@ -16,6 +16,15 @@ logger = logging.getLogger(__name__)
 # 允许的扩展名（仅安全图片类型）
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
 
+# 扩展名白名单（用于 MIME —> 后缀映射时优先保留原始扩展名）
+EXTENSION_MAP = {
+    ".png": ".png",
+    ".jpg": ".jpg",
+    ".jpeg": ".jpeg",
+    ".gif": ".gif",
+    ".webp": ".webp",
+}
+
 # 允许的 MIME 类型（与扩展名对应）
 ALLOWED_MIME_TYPES = {
     "image/png",
@@ -24,8 +33,20 @@ ALLOWED_MIME_TYPES = {
     "image/webp",
 }
 
+# MIME → 默认后缀
+MIME_EXT_MAP = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",  # 默认 .jpg，但如果用户传 .jpeg 会被单独处理
+    "image/gif": ".gif",
+    "image/webp": ".webp",
+}
+
 # 上传文件存储路径（项目根目录下 uploads/，不放在 static/ 下）
 UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
+
+# Pillow DecompressionBomb 防护：最大像素数（5000×5000 = 25M 像素）
+Image.MAX_IMAGE_PIXELS = 25_000_000
+MAX_IMAGE_DIMENSION = 5000  # 宽高中任一维度不超过 5000px
 
 
 def _ensure_upload_dir():
@@ -65,6 +86,10 @@ def validate_upload(file_storage):
         return False, "文件为空", None
 
     # --- 3. 原始文件名安全检查 ---
+    # 显式拒绝路径穿越：含 / 或 \ 的原始文件名
+    if "/" in original_name or "\\" in original_name:
+        return False, "文件名不能包含路径分隔符", None
+
     safe_display = secure_filename(original_name)
     if not safe_display:
         return False, "文件名不合法", None
@@ -84,14 +109,18 @@ def validate_upload(file_storage):
         return False, f"文件内容不是有效图片（检测到: {detected_mime}）", None
 
     # --- 6. 扩展名与真实类型一致性校验 ---
-    expected_ext = _suffix_from_mime(detected_mime)
-    if ext != expected_ext:
+    # 允许 .jpg/.jpeg 互通（都是 image/jpeg）
+    allowed_for_mime = {".jpg", ".jpeg"} if detected_mime == "image/jpeg" else {MIME_EXT_MAP[detected_mime]}
+    if ext not in allowed_for_mime:
         return False, f"文件扩展名与真实类型不匹配（.{ext} → {detected_mime}）", None
+
+    # 确定最终存储用的后缀：尽量保留用户原始后缀，回退 MIME 默认
+    final_ext = ext if ext in EXTENSION_MAP else MIME_EXT_MAP[detected_mime]
 
     # --- 7. 用 Pillow 验证并重新编码图片（去除恶意 payload 和元数据）---
     try:
         img = Image.open(file_storage)
-        # 验证图片完整性（会触发完整解码）
+        # 验证图片完整性
         img.verify()
     except Exception as e:
         return False, f"图片格式无效: {e}", None
@@ -100,6 +129,9 @@ def validate_upload(file_storage):
     file_storage.seek(0)
     try:
         img = Image.open(file_storage)
+        # 解压炸弹防护：检查宽高
+        if img.width > MAX_IMAGE_DIMENSION or img.height > MAX_IMAGE_DIMENSION:
+            return False, f"图片尺寸过大（最大 {MAX_IMAGE_DIMENSION}x{MAX_IMAGE_DIMENSION}）", None
         # 转为 RGB（去除 RGBA 的透明通道、调色板等）
         if img.mode in ("RGBA", "LA", "P", "PA"):
             img = img.convert("RGBA")
@@ -111,7 +143,7 @@ def validate_upload(file_storage):
     # --- 8. 生成安全的存储文件名 ---
     _ensure_upload_dir()
     while True:
-        safe_name = f"{uuid.uuid4().hex}{expected_ext}"
+        safe_name = f"{uuid.uuid4().hex}{final_ext}"
         save_path = UPLOAD_DIR / safe_name
         if not save_path.exists():  # 防止同名覆盖
             break
