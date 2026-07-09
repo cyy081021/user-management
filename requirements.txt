@@ -7,4 +7,4 @@ redis==6.4.0
 gunicorn==26.0.0
 pyOpenSSL==26.2.0
 Pillow==12.2.0
-python-magic==0.4.28
+python-magic==0.4.27
