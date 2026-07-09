@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """文件上传安全测试"""
 import sys, os, io
-sys.path.insert(0, "/root")
-from app.upload_handler import validate_upload
+from pathlib import Path
+ROOT_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT_DIR))
+from app.upload_handler import validate_upload, UPLOAD_DIR
 from werkzeug.datastructures import FileStorage
 from PIL import Image
 
@@ -31,10 +33,11 @@ def rgif():
     Image.new("RGB", (5,5), (0,0,255)).save(buf, "GIF")
     return buf.getvalue()
 
-d = "/root/uploads"
-if os.path.exists(d):
-    for f in os.listdir(d):
-        os.remove(os.path.join(d, f))
+# 清理上传目录
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+for f in UPLOAD_DIR.iterdir():
+    if f.is_file():
+        f.unlink()
 
 print("=" * 50)
 print("Upload Security Tests")

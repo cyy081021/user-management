@@ -14,7 +14,9 @@ import subprocess
 import time
 import re
 import requests
+from pathlib import Path
 
+ROOT_DIR = Path(__file__).resolve().parents[1]
 BASE_URL = "http://127.0.0.1:5000"
 PASS = "✅"
 FAIL = "❌"
@@ -158,7 +160,7 @@ print("\n━━━ 测试 7：生产模式不暴露公网 ━━━")
 
 # 检查 scripts/run.sh 中 prod 是否绑定 127.0.0.1
 try:
-    with open("/root/scripts/run.sh") as f:
+    with open(ROOT_DIR / "scripts" / "run.sh", encoding="utf-8") as f:
         content = f.read()
     prod_binds_127 = "--bind 127.0.0.1:5000" in content and "APP_ENV=production" in content
     test("生产模式仅绑定 127.0.0.1 + APP_ENV=production", prod_binds_127)
