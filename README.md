@@ -99,7 +99,21 @@ redis-server --daemonize yes
 见 [requirements.txt](requirements.txt)，核心依赖：
 
 - Flask 3.1、Werkzeug 3.1、Flask-WTF、Flask-Limiter
-- Redis、Gunicorn、SQLite3
+- Redis、Gunicorn、SQLite3、Pillow、python-magic
+
+## 🔖 版本历史
+
+| 版本 | 说明 |
+|:----:|------|
+| v5.3 | 修复上传安全交付问题（依赖/路径穿越/炸弹防护/CI/jpeg） |
+| v5.2 | 深度加固文件上传安全（内容校验/重编码/受控访问） |
+| v5.1 | 修复文件上传漏洞（后缀白名单 + 防路径穿越） |
+| v5.0 | 新增头像上传功能 + 修复 SQL 注入 |
+| v4.1 | 安全审计修复（渐进延迟/SECRET_KEY/明文清除） |
+| v4.0 | 模块化重构（app/ 包拆分） |
+| v3.0 | 12 项安全加固改进 |
+| v2.0 | 密码移入环境变量 |
+| v1.0 | 初始安全加固 |
 
 ## 🏭 生产部署
 
