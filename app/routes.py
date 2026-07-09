@@ -121,14 +121,25 @@ def upload():
         if not file or file.filename == "":
             return render_template("upload.html", error="请选择文件")
 
-        filename = file.filename
+        # 仅允许常见图片后缀
+        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+        original_filename = file.filename
+        ext = os.path.splitext(original_filename)[1].lower()
+        if ext not in allowed_extensions:
+            return render_template("upload.html", error="仅允许上传图片文件（jpg/jpeg/png/gif/webp/bmp/svg）")
+
+        # 防止路径穿越
+        safe_filename = os.path.basename(original_filename)
+        if safe_filename != original_filename:
+            return render_template("upload.html", error="文件名不合法")
+
         upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "uploads")
         os.makedirs(upload_dir, exist_ok=True)
-        save_path = os.path.join(upload_dir, filename)
+        save_path = os.path.join(upload_dir, safe_filename)
         file.save(save_path)
 
-        file_url = url_for("static", filename=f"uploads/{filename}")
-        return render_template("upload.html", success=True, file_url=file_url, filename=filename)
+        file_url = url_for("static", filename=f"uploads/{safe_filename}")
+        return render_template("upload.html", success=True, file_url=file_url, filename=safe_filename)
 
     return render_template("upload.html")
 
