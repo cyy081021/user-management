@@ -9,6 +9,7 @@ from app.auth import perform_login
 from app.users import get_safe_user_info
 from app.security import redis_healthy
 from app.database import get_db
+from app.upload_handler import validate_upload
 
 main_bp = Blueprint("main", __name__, template_folder="../templates")
 logger = logging.getLogger(__name__)
@@ -118,30 +119,42 @@ def upload():
 
     if request.method == "POST":
         file = request.files.get("file")
-        if not file or file.filename == "":
-            return render_template("upload.html", error="请选择文件")
-
-        # 仅允许常见图片后缀
-        allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
-        original_filename = file.filename
-        ext = os.path.splitext(original_filename)[1].lower()
-        if ext not in allowed_extensions:
-            return render_template("upload.html", error="仅允许上传图片文件（jpg/jpeg/png/gif/webp/bmp/svg）")
-
-        # 防止路径穿越
-        safe_filename = os.path.basename(original_filename)
-        if safe_filename != original_filename:
-            return render_template("upload.html", error="文件名不合法")
-
-        upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "uploads")
-        os.makedirs(upload_dir, exist_ok=True)
-        save_path = os.path.join(upload_dir, safe_filename)
-        file.save(save_path)
-
-        file_url = url_for("static", filename=f"uploads/{safe_filename}")
-        return render_template("upload.html", success=True, file_url=file_url, filename=safe_filename)
+        ok, message, result = validate_upload(file)
+        if ok:
+            return render_template("upload.html", success=True, file_url=result["url"], filename=result["display_name"])
+        return render_template("upload.html", error=message)
 
     return render_template("upload.html")
+
+
+@main_bp.route("/uploads/<filename>")
+def uploaded_file(filename):
+    """受控的文件下载/预览接口"""
+    from flask import send_from_directory, abort
+    from app.upload_handler import UPLOAD_DIR
+
+    safe_name = os.path.basename(filename)
+    file_path = UPLOAD_DIR / safe_name
+    if not file_path.exists():
+        abort(404)
+
+    # 根据扩展名设置 Content-Type
+    ext = os.path.splitext(safe_name)[1].lower()
+    mime_map = {
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+    }
+    mime = mime_map.get(ext, "application/octet-stream")
+
+    response = send_from_directory(str(UPLOAD_DIR), safe_name)
+    response.headers["Content-Type"] = mime
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Content-Disposition"] = "inline"
+    response.headers["Cache-Control"] = "no-store"
+    return response
 
 
 @main_bp.route("/logout")
