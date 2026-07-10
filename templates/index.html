@@ -1,9 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% if username and user %}
+{% if user %}
 <div class="card">
-    <h2>欢迎回来，{{ username }}！</h2>
+    <h2>欢迎回来，{{ user.username }}！</h2>
 
     <div class="user-info">
         <h3>用户信息</h3>
@@ -26,7 +26,7 @@
             </tr>
             <tr>
                 <td class="info-label">余额</td>
-                <td class="info-value">{{ user.balance }}</td>
+                <td class="info-value">¥{{ "%.2f"|format(user.balance_cents / 100) }}</td>
             </tr>
         </table>
     </div>
@@ -42,8 +42,8 @@
     </div>
 
     <div class="upload-shortcut">
-        <a href="/upload" class="btn btn-primary">上传头像</a>
-        <a href="/profile?user_id=1" class="btn btn-primary" style="margin-left:8px;">个人中心</a>
+        <a href="{{ url_for('main.upload') }}" class="btn btn-primary">上传头像</a>
+        <a href="{{ url_for('main.profile') }}" class="btn btn-primary" style="margin-left:8px;">个人中心</a>
     </div>
 
     {% if search_results is not none %}
@@ -76,13 +76,16 @@
     </div>
     {% endif %}
 
-    <a href="/logout" class="btn btn-danger">退出登录</a>
+    <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-danger">退出登录</button>
+    </form>
 </div>
 {% else %}
 <div class="card">
     <h2>请先登录</h2>
     <p>您还没有登录，请点击下方按钮登录系统。</p>
-    <a href="/login" class="btn btn-primary">前往登录</a>
+    <a href="{{ url_for('main.login') }}" class="btn btn-primary">前往登录</a>
 </div>
 {% endif %}
 {% endblock %}

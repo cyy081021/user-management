@@ -8,6 +8,10 @@
     <div class="alert alert-error">{{ error }}</div>
     {% endif %}
 
+    {% if message %}
+    <div class="alert alert-success">{{ message }}</div>
+    {% endif %}
+
     {% if user %}
     <div class="user-info">
         <h3>用户资料</h3>
@@ -29,27 +33,65 @@
                 <td class="info-value">{{ user.phone }}</td>
             </tr>
             <tr>
+                <td class="info-label">角色</td>
+                <td class="info-value">{{ user.role }}</td>
+            </tr>
+            <tr>
                 <td class="info-label">余额</td>
-                <td class="info-value">¥{{ "%.2f"|format(user.balance) }}</td>
+                <td class="info-value">¥{{ "%.2f"|format(balance_yuan) }}</td>
             </tr>
         </table>
     </div>
 
+    {% if session.get("role") == "admin" and user.id != session.get("user_id") %}
+    <div class="admin-badge" style="margin-top:12px;padding:8px;background:#fff7e6;border-radius:6px;border:1px solid #ffd591;">
+        管理员模式：正在查看用户 #{{ user.id }}
+    </div>
+    {% endif %}
+
     <div class="recharge-section">
-        <h3>充值</h3>
-        <form method="POST" action="/recharge" class="recharge-form">
+        <h3>申请充值</h3>
+        <form method="POST" action="{{ url_for('main.recharge') }}" class="recharge-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-            <input type="hidden" name="user_id" value="{{ user.id }}">
 
             <div class="form-group">
-                <label for="amount">充值金额</label>
+                <label for="amount">充值金额（0.01 ~ 10000.00 元）</label>
                 <input type="text" id="amount" name="amount" placeholder="输入金额" required>
             </div>
-            <button type="submit" class="btn btn-primary">充值</button>
+            <button type="submit" class="btn btn-primary">提交充值申请</button>
         </form>
     </div>
 
-    <a href="/" class="btn" style="background:#ccc;color:#333;margin-top:16px;">返回首页</a>
+    {% if session.get("role") == "admin" and pending_orders is defined %}
+    <div class="pending-orders" style="margin-top:24px;">
+        <h3>待审批充值</h3>
+        {% if pending_orders %}
+        <table class="info-table search-table">
+            <thead><tr><th>订单ID</th><th>用户</th><th>金额</th><th>操作</th></tr></thead>
+            <tbody>
+            {% for o in pending_orders %}
+            <tr>
+                <td>{{ o.id }}</td>
+                <td>{{ o.username }}</td>
+                <td>¥{{ "%.2f"|format(o.amount_cents / 100) }}</td>
+                <td>
+                    <form method="POST" action="{{ url_for('main.approve_recharge') }}" style="display:inline;">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="order_id" value="{{ o.id }}">
+                        <button type="submit" class="btn btn-primary" style="padding:4px 12px;font-size:12px;">审批通过</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p style="color:#999;">暂无待审批订单</p>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('main.index') }}" class="btn" style="background:#ccc;color:#333;margin-top:16px;">返回首页</a>
     {% endif %}
 </div>
 {% endblock %}

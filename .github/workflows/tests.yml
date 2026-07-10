@@ -31,7 +31,7 @@ jobs:
 
       - name: 安装系统依赖
         run: |
-          sudo apt-get update && sudo apt-get install -y libmagic1
+          sudo apt-get update && sudo apt-get install -y libmagic1 sqlite3
 
       - name: 安装依赖
         run: |
@@ -49,14 +49,18 @@ jobs:
           sleep 3
 
       - name: 运行安全测试
-        env:
-          SECRET_KEY: ci-secret-key-for-testing-abcdef123456
-          ADMIN_PASSWORD: Ci@Strong#Admin789
-          ALICE_PASSWORD: Ci@Strong#Alice789
-          REDIS_URL: redis://localhost:6379/0
         run: |
           python tests/test_security.py
 
       - name: 运行上传安全测试
         run: |
           python tests/test_upload_security.py
+
+      - name: 运行业务逻辑测试
+        env:
+          SECRET_KEY: ci-secret-key-for-testing-abcdef123456
+          ADMIN_PASSWORD: Ci@Strong#Admin789
+          ALICE_PASSWORD: Ci@Strong#Alice789
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          python tests/test_business_logic.py
