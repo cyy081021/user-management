@@ -157,7 +157,50 @@ def uploaded_file(filename):
     return response
 
 
-@main_bp.route("/logout")
+@main_bp.route("/profile")
+def profile():
+    if "username" not in session:
+        return redirect("/login")
+
+    user_id = request.args.get("user_id", "").strip()
+    if not user_id or not user_id.isdigit():
+        return render_template("profile.html", error="无效的用户ID", user=None)
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, username, email, phone, balance FROM users WHERE id = ?", (int(user_id),))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return render_template("profile.html", error="用户不存在", user=None)
+
+    return render_template("profile.html", user=dict(row))
+
+
+@main_bp.route("/recharge", methods=["POST"])
+def recharge():
+    if "username" not in session:
+        return redirect("/login")
+
+    user_id = request.form.get("user_id", "").strip()
+    amount = request.form.get("amount", "0").strip()
+
+    if not user_id or not user_id.isdigit():
+        return redirect("/")
+
+    try:
+        amount_val = float(amount)
+    except ValueError:
+        return redirect(f"/profile?user_id={user_id}")
+
+    conn = get_db()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (amount_val, int(user_id)))
+    conn.commit()
+    conn.close()
+
+    return redirect(f"/profile?user_id={user_id}")
 def logout():
     username = session.get("username", "unknown")
     session.clear()

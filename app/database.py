@@ -28,7 +28,8 @@ def init_db():
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             email TEXT,
-            phone TEXT
+            phone TEXT,
+            balance REAL DEFAULT 0.0
         )
     """)
 
