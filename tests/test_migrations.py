@@ -139,3 +139,22 @@ for db in [db_new, db53, db60]:
         db.unlink()
 
 sys.exit(0 if failed == 0 else 1)
+
+# =============================================================
+print("\n--- 3b. v6.0 overflow balance (1e100) ---")
+db1e100 = ROOT / "data" / "test_1e100.db"
+if db1e100.exists(): db1e100.unlink()
+
+conn1e = sqlite3.connect(str(db1e100))
+conn1e.execute("CREATE TABLE users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT NOT NULL, email TEXT, phone TEXT, balance REAL DEFAULT 0.0)")
+conn1e.execute("INSERT INTO users (username, password, email, phone, balance) VALUES ('huge','plainpwd','h@x.com','999', 1e100)")
+conn1e.commit(); conn1e.close()
+
+init_db(db_path=str(db1e100))
+conn = get_db(str(db1e100))
+huge = conn.execute("SELECT * FROM users WHERE username='huge'").fetchone()
+test("1e100 balance -> 0 cents (not crash)", huge and huge["balance_cents"] == 0)
+conn.close()
+
+# Add cleanup for this db
+if db1e100.exists(): db1e100.unlink()

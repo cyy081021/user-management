@@ -78,7 +78,7 @@ redis-server --daemonize yes
 
 ## 🛡️ 安全特性
 
-- 密码 PBKDF2 哈希，从环境变量读取
+- 密码 Werkzeug 安全哈希（当前默认 scrypt），从环境变量读取
 - 启动时强制校验密码强度（≥12位+大小写+数字+特殊字符）
 - 占位密码拒绝启动
 - CSRF 全局保护
@@ -91,6 +91,10 @@ redis-server --daemonize yes
 - 生产模式下强制 SECRET_KEY 配置
 - Server 头不暴露版本信息
 - Git 历史已清除泄露密码（filter-repo）
+- ADMIN_PASSWORD/ALICE_PASSWORD 修改后重启自动同步
+- 余额使用 INTEGER 分（balance_cents），避免浮点误差
+- 充值审批使用原子事务，并发返回 409
+- 支持从 v5.3/v6.0/v6.1 安全迁移
 
 详见 [docs/security/security-fix-report.md](docs/security/security-fix-report.md)
 
@@ -105,6 +109,7 @@ redis-server --daemonize yes
 
 | 版本 | 说明 |
 |:----:|------|
+| v6.2 | 深度修复（迁移异常/密码轮换/注册校验/Session撤销/并发路由测试） |
 | v6.1 | 业务逻辑安全审计修复（统一数据源/IDOR/充值/退出/迁移/测试） |
 | v6.0 | 新增个人中心 + 充值功能 |
 | v5.3 | 修复上传安全交付问题 |
