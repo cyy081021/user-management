@@ -11,12 +11,12 @@ os.environ["ALICE_PASSWORD"] = "Alice@Secure#Pass456"
 os.environ["FLASK_HTTPS"] = "0"
 os.environ["APP_ENV"] = "development"
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
+os.environ["WTF_CSRF_ENABLED"] = "0"
 
 from app import create_app
 from app.database import get_db, init_db
 
 app = create_app()
-app.config["WTF_CSRF_ENABLED"] = False
 client = app.test_client()
 client.testing = True
 
@@ -114,7 +114,7 @@ conn.close()
 test("Alice balance increased by 5000 cents", bal and bal["balance_cents"] == 5000)
 
 r = client.post("/admin/approve_recharge", data={"order_id": "1"})
-test("Double approval rejected (400)", r.status_code == 400)
+test("Double approval rejected (409/400)", r.status_code in (400, 409))
 
 print("\n--- 5. Balance Consistency ---")
 client.post("/login", data={"username": "alice", "password": "Alice@Secure#Pass456"}, follow_redirects=True)

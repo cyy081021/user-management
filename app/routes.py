@@ -2,12 +2,14 @@
 路由模块 — 所有 HTTP 路由定义
 """
 import os
+import uuid
 import logging
+from functools import wraps
 from decimal import Decimal, InvalidOperation
-from flask import Blueprint, render_template, request, redirect, session, url_for, abort
+from flask import Blueprint, render_template, request, redirect, session, url_for, abort, jsonify
 
 from app.auth import perform_login
-from app.users import get_user_by_id
+from app.users import get_user_by_id, get_user_role
 from app.security import redis_healthy, _check_password_strength
 from app.database import get_db
 from app.upload_handler import validate_upload
@@ -17,13 +19,32 @@ main_bp = Blueprint("main", __name__, template_folder="../templates")
 logger = logging.getLogger(__name__)
 
 
-def login_required():
-    if "user_id" not in session:
-        return redirect("/login")
+# =============================================================
+# 装饰器
+# =============================================================
+def login_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return wrapper
+
+
+def admin_required(f):
+    """每次请求从 DB 读取当前角色，不信任 session 缓存"""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect("/login")
+        role = get_user_role(session["user_id"])
+        if role != "admin":
+            abort(403)
+        return f(*args, **kwargs)
+    return wrapper
 
 
 def _user_context():
-    """从 session 获取当前用户信息"""
     uid = session.get("user_id")
     if uid:
         return get_user_by_id(uid)
@@ -38,14 +59,21 @@ def index():
     user = _user_context()
     keyword = request.args.get("keyword", "").strip()
     search_results = None
-    if keyword:
+    if keyword and user:
         conn = get_db()
         try:
             like = f"%{keyword}%"
-            rows = conn.execute(
-                "SELECT id, username, email, phone FROM users WHERE username LIKE ? OR email LIKE ?",
-                (like, like),
-            ).fetchall()
+            role = get_user_role(user["id"])
+            if role == "admin":
+                rows = conn.execute(
+                    "SELECT id, username, email, phone, role FROM users WHERE username LIKE ? OR email LIKE ?",
+                    (like, like),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT id, username FROM users WHERE username LIKE ?",
+                    (like,),
+                ).fetchall()
             search_results = [dict(r) for r in rows]
         finally:
             conn.close()
@@ -54,7 +82,7 @@ def index():
 
 
 # =============================================================
-# 登录（统一数据源：SQLite users 表）
+# 登录
 # =============================================================
 @main_bp.route("/login", methods=["GET", "POST"])
 def login():
@@ -67,14 +95,13 @@ def login():
             session.permanent = True
             session["user_id"] = result["id"]
             session["username"] = result["username"]
-            session["role"] = result.get("role", "user")
             return redirect("/")
         return render_template("login.html", error=result)
     return render_template("login.html")
 
 
 # =============================================================
-# 注册（写入 SQLite，密码哈希，强度校验）
+# 注册
 # =============================================================
 @main_bp.route("/register", methods=["GET", "POST"])
 def register():
@@ -93,7 +120,7 @@ def register():
         try:
             hashed = generate_password_hash(password)
             conn.execute(
-                "INSERT INTO users (username, password, email, phone, role) VALUES (?, ?, ?, ?, 'user')",
+                "INSERT INTO users (username, password, email, phone, role, password_migrated) VALUES (?, ?, ?, ?, 'user', 1)",
                 (username, hashed, email, phone),
             )
             conn.commit()
@@ -101,7 +128,8 @@ def register():
             return render_template("login.html", message="注册成功，请登录")
         except Exception as e:
             conn.rollback()
-            return render_template("register.html", error=f"注册失败：{e}")
+            logger.error("注册失败: user=%s error=%s", username, e)
+            return render_template("register.html", error="注册失败，用户名可能已存在")
         finally:
             conn.close()
 
@@ -109,21 +137,30 @@ def register():
 
 
 # =============================================================
-# 搜索（公开，仅返回基本信息）
+# 搜索（需登录，按角色限制字段）
 # =============================================================
 @main_bp.route("/search")
+@login_required
 def search():
     keyword = request.args.get("keyword", "").strip()
     if not keyword:
         return redirect("/")
 
+    uid = session["user_id"]
+    role = get_user_role(uid)
     conn = get_db()
     try:
         like = f"%{keyword}%"
-        rows = conn.execute(
-            "SELECT id, username, email, phone FROM users WHERE username LIKE ? OR email LIKE ?",
-            (like, like),
-        ).fetchall()
+        if role == "admin":
+            rows = conn.execute(
+                "SELECT id, username, email, phone, role FROM users WHERE username LIKE ? OR email LIKE ?",
+                (like, like),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, username FROM users WHERE username LIKE ?",
+                (like,),
+            ).fetchall()
         results = [dict(r) for r in rows]
     finally:
         conn.close()
@@ -132,18 +169,17 @@ def search():
 
 
 # =============================================================
-# 个人中心（仅当前登录用户）
+# 个人中心
 # =============================================================
 @main_bp.route("/profile")
+@login_required
 def profile():
-    if "user_id" not in session:
-        return redirect("/login")
-
     uid = session["user_id"]
-    # 管理员可通过 ?user_id=X 查询其他用户
     target_id = request.args.get("user_id", "").strip()
+
     if target_id and target_id.isdigit():
-        if session.get("role") != "admin":
+        role = get_user_role(uid)
+        if role != "admin":
             abort(403)
         uid = int(target_id)
 
@@ -151,32 +187,30 @@ def profile():
     if not user:
         abort(404)
 
-    # balance_cents → 元
     balance_yuan = user["balance_cents"] / 100.0 if user.get("balance_cents") else 0.0
 
-    # 管理员可见待审批订单
+    # 管理员可见待审批订单（实时从 DB 读角色）
     pending_orders = None
-    if session.get("role") == "admin":
-        conn2 = get_db()
+    if get_user_role(session["user_id"]) == "admin":
+        conn = get_db()
         try:
-            rows = conn2.execute(
-                "SELECT o.id, o.user_id, o.amount_cents, u.username FROM recharge_orders o JOIN users u ON o.user_id = u.id WHERE o.status = 'pending' ORDER BY o.created_at"
+            rows = conn.execute(
+                "SELECT o.id, o.user_id, o.amount_cents, u.username FROM recharge_orders o "
+                "JOIN users u ON o.user_id = u.id WHERE o.status = 'pending' ORDER BY o.created_at"
             ).fetchall()
             pending_orders = [dict(r) for r in rows]
         finally:
-            conn2.close()
+            conn.close()
 
     return render_template("profile.html", user=user, balance_yuan=balance_yuan, pending_orders=pending_orders)
 
 
 # =============================================================
-# 充值申请（仅创建 pending 订单，不立即入账）
+# 充值申请
 # =============================================================
 @main_bp.route("/recharge", methods=["POST"])
+@login_required
 def recharge():
-    if "user_id" not in session:
-        return redirect("/login")
-
     uid = session["user_id"]
     user = get_user_by_id(uid)
     by = user["balance_cents"] / 100.0 if user else 0.0
@@ -200,7 +234,6 @@ def recharge():
 
     conn = get_db()
     try:
-        import uuid
         tx_id = uuid.uuid4().hex
         conn.execute(
             "INSERT INTO recharge_orders (transaction_id, user_id, amount_cents, status) VALUES (?, ?, ?, 'pending')",
@@ -215,44 +248,59 @@ def recharge():
     finally:
         conn.close()
 
-    return render_template("profile.html", user=user, balance_yuan=by, message=f"充值订单已创建（{amount_str}元），等待管理员审批", pending_orders=None)
+    return render_template("profile.html", user=user, balance_yuan=by,
+                           message=f"充值订单已创建（{amount_str}元），等待管理员审批")
 
 
 # =============================================================
-# 管理员审批充值
+# 管理员审批充值（原子事务：BEGIN IMMEDIATE + 条件更新）
 # =============================================================
 @main_bp.route("/admin/approve_recharge", methods=["POST"])
+@admin_required
 def approve_recharge():
-    if session.get("role") != "admin":
-        abort(403)
-
     order_id = request.form.get("order_id", "").strip()
     if not order_id or not order_id.isdigit():
         abort(400)
 
     conn = get_db()
     try:
+        # BEGIN IMMEDIATE 获取 XL 写锁，防止并发竞态
+        conn.execute("BEGIN IMMEDIATE")
+
         order = conn.execute(
             "SELECT id, user_id, amount_cents, status FROM recharge_orders WHERE id = ?",
             (int(order_id),),
         ).fetchone()
 
         if not order:
-            return "订单不存在", 404
-        if order["status"] != "pending":
-            return "订单已处理", 400
+            conn.rollback()
+            return jsonify({"error": "订单不存在"}), 404
 
-        # 事务：更新状态 + 增加余额
-        conn.execute("UPDATE recharge_orders SET status = 'approved', approved_by = ?, updated_at = datetime('now') WHERE id = ?",
-                      (session["user_id"], order["id"]))
-        conn.execute("UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?",
-                      (order["amount_cents"], order["user_id"]))
+        if order["status"] != "pending":
+            conn.rollback()
+            return jsonify({"error": "订单已处理"}), 409
+
+        # 原子抢占：条件更新，rowcount 为 1 表示我们拿到了
+        cursor = conn.execute(
+            "UPDATE recharge_orders SET status = 'approved', approved_by = ?, updated_at = datetime('now') "
+            "WHERE id = ? AND status = 'pending'",
+            (session["user_id"], order["id"]),
+        )
+        if cursor.rowcount != 1:
+            conn.rollback()
+            return jsonify({"error": "订单已被其他管理员处理"}), 409
+
+        # 增加余额（同一事务内）
+        conn.execute(
+            "UPDATE users SET balance_cents = balance_cents + ? WHERE id = ?",
+            (order["amount_cents"], order["user_id"]),
+        )
         conn.commit()
-        logger.info("充值审批通过: order=%d user=%s amount_cents=%d", order["id"], order["user_id"], order["amount_cents"])
+        logger.info("充值审批通过: order=%d user=%d amount_cents=%d", order["id"], order["user_id"], order["amount_cents"])
     except Exception:
         conn.rollback()
         logger.exception("审批失败")
-        return "审批失败", 500
+        return jsonify({"error": "审批失败"}), 500
     finally:
         conn.close()
 
@@ -260,7 +308,7 @@ def approve_recharge():
 
 
 # =============================================================
-# 退出（POST，CSRF 保护）
+# 退出
 # =============================================================
 @main_bp.route("/logout", methods=["POST"])
 def logout():
@@ -271,36 +319,31 @@ def logout():
 
 
 # =============================================================
-# 上传 & 文件服务（不变）
+# 上传
 # =============================================================
 @main_bp.route("/upload", methods=["GET", "POST"])
+@login_required
 def upload():
-    if "user_id" not in session:
-        return redirect("/login")
-
     if request.method == "POST":
         file = request.files.get("file")
         ok, message, result = validate_upload(file)
         if ok:
             return render_template("upload.html", success=True, file_url=result["url"], filename=result["display_name"])
         return render_template("upload.html", error=message)
-
     return render_template("upload.html")
 
 
 @main_bp.route("/uploads/<filename>")
 def uploaded_file(filename):
-    from flask import send_from_directory, abort as f_abort
+    from flask import send_from_directory
     from app.upload_handler import UPLOAD_DIR
     safe_name = os.path.basename(filename)
     file_path = UPLOAD_DIR / safe_name
     if not file_path.exists():
-        f_abort(404)
-
+        abort(404)
     ext = os.path.splitext(safe_name)[1].lower()
     mime_map = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
     mime = mime_map.get(ext, "application/octet-stream")
-
     response = send_from_directory(str(UPLOAD_DIR), safe_name)
     response.headers["Content-Type"] = mime
     response.headers["X-Content-Type-Options"] = "nosniff"

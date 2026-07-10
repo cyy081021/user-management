@@ -61,13 +61,23 @@ def create_app():
     app.config["WTF_CSRF_TIME_LIMIT"] = 3600
     app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 
+    # 允许测试环境关闭 CSRF
+    if os.environ.get("WTF_CSRF_ENABLED", "1") == "0":
+        app.config["WTF_CSRF_ENABLED"] = False
+
     CSRFProtect(app)
 
     redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+
+    # 测试模式：使用更高的限流阈值或禁用
+    limiter_defaults = ["200 per day", "50 per hour"]
+    if os.environ.get("WTF_CSRF_ENABLED", "1") == "0":
+        limiter_defaults = ["10000 per day", "10000 per hour"]
+
     Limiter(
         get_remote_address,
         app=app,
-        default_limits=["200 per day", "50 per hour"],
+        default_limits=limiter_defaults,
         storage_uri=redis_url,
         storage_options={"socket_connect_timeout": 2},
     )

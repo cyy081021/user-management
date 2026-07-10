@@ -49,12 +49,10 @@ jobs:
           sleep 3
 
       - name: 运行安全测试
-        run: |
-          python tests/test_security.py
+        run: python tests/test_security.py
 
       - name: 运行上传安全测试
-        run: |
-          python tests/test_upload_security.py
+        run: python tests/test_upload_security.py
 
       - name: 运行业务逻辑测试
         env:
@@ -62,5 +60,20 @@ jobs:
           ADMIN_PASSWORD: Ci@Strong#Admin789
           ALICE_PASSWORD: Ci@Strong#Alice789
           REDIS_URL: redis://localhost:6379/0
-        run: |
-          python tests/test_business_logic.py
+        run: python tests/test_business_logic.py
+
+      - name: 运行迁移测试
+        env:
+          SECRET_KEY: ci-secret-key-for-testing-abcdef123456
+          ADMIN_PASSWORD: Ci@Strong#Admin789
+          ALICE_PASSWORD: Ci@Strong#Alice789
+          REDIS_URL: redis://localhost:6379/0
+        run: python tests/test_migrations.py
+
+      - name: 运行并发审批测试
+        env:
+          SECRET_KEY: ci-secret-key-for-testing-abcdef123456
+          ADMIN_PASSWORD: Ci@Strong#Admin789
+          ALICE_PASSWORD: Ci@Strong#Alice789
+          REDIS_URL: redis://localhost:6379/0
+        run: python tests/test_concurrent_approval.py
