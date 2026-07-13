@@ -365,37 +365,13 @@ def uploaded_file(filename):
 
 @main_bp.route("/page")
 def page():
-    from pathlib import Path
-
+    """白名单映射：名称 → 固定模板，不读取文件"""
+    PAGE_TEMPLATES = {"help": "pages/help.html"}
     name = request.args.get("name", "").strip()
-    if not name:
+    template = PAGE_TEMPLATES.get(name)
+    if not template:
         return "页面不存在", 404
-
-    # Fixed whitelist: only allow known page names
-    PAGE_WHITELIST = {"help": "help.html"}
-
-    if name not in PAGE_WHITELIST:
-        return "页面不存在", 404
-
-    pages_dir = Path(__file__).resolve().parent.parent / "pages"
-    candidate = pages_dir / PAGE_WHITELIST[name]
-
-    # Resolve and confirm the file is inside pages_dir
-    try:
-        real = candidate.resolve()
-    except Exception:
-        return "页面不存在", 404
-
-    if not str(real).startswith(str(pages_dir.resolve()) + os.sep) and real != pages_dir.resolve():
-        return "页面不存在", 404
-
-    if not real.is_file() or real.suffix != ".html":
-        return "页面不存在", 404
-
-    with open(real, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    return render_template("page.html", user=_user_context(), page_content=content)
+    return render_template(template, user=_user_context())
 
 
 @main_bp.route("/health")

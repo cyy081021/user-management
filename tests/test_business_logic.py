@@ -41,7 +41,7 @@ if dbp.exists():
 init_db(admin_pw="Admin@Strong#Pass789", alice_pw="Alice@Secure#Pass456")
 
 print("\n--- 1. Registration & Login ---")
-r = client.post("/register", data={"username": "newuser", "password": "NewUser@Pass123", "email": "n@t.com", "phone": "111"}, follow_redirects=True)
+r = client.post("/register", data={"username": "newuser", "password": "NewUser@Pass123", "email": "n@t.com", "phone": "13800138001"}, follow_redirects=True)
 test("Register success", "注册成功" in h(r))
 
 # Login as new user
