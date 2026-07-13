@@ -10,6 +10,9 @@ os.environ["FLASK_HTTPS"] = "0"; os.environ["APP_ENV"] = "development"
 os.environ["WTF_CSRF_ENABLED"] = "0"
 os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6379/0")
 
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+ALICE_PASSWORD = os.environ["ALICE_PASSWORD"]
+
 results = []
 def test(name, ok, detail=""):
     m = "OK" if ok else "FAIL"
@@ -19,6 +22,12 @@ def test(name, ok, detail=""):
 def csrf(html):
     m = re.search(r'name="csrf_token" value="([^"]+)"', html)
     return m.group(1) if m else ""
+
+def login_as(c, username, password):
+    """登录并验证成功"""
+    r = c.post("/login", data={"username": username, "password": password}, follow_redirects=True)
+    ok = "欢迎回来" in r.data.decode() or r.status_code == 200
+    return ok
 
 print("=" * 60)
 print("Concurrent Approval & Route Tests")
@@ -65,24 +74,33 @@ print("\n--- 2. HTTP route concurrent ---")
 conn = get_db(str(db)); conn.execute("UPDATE recharge_orders SET status='pending',approved_by=NULL WHERE id=1")
 conn.execute("UPDATE users SET balance_cents=0 WHERE id=2"); conn.commit(); conn.close()
 
-from app import create_app
 os.environ["DATABASE_PATH"] = str(db)
 results_http = []
 
 def do_http_approve(name):
     try:
-        app2 = create_app(); c2 = app2.test_client()
-        c2.post("/login", data={"username":"admin","password":"Admin@Strong#Pass789"}, follow_redirects=True)
+        app2 = __import__("app", fromlist=["create_app"]).create_app()
+        c2 = app2.test_client()
+        # Login with CI-compatible password
+        if not login_as(c2, "admin", ADMIN_PASSWORD):
+            results_http.append((name, "login_failed"))
+            return
         p = c2.get("/profile").data.decode()
         r = c2.post("/admin/approve_recharge", data={"order_id":"1","csrf_token":csrf(p)})
-        results_http.append((name, r.status_code))
-    except Exception as e: results_http.append((name, f"error:{e}"))
+        # 严格判断：成功=302到/profile，409=冲突
+        if r.status_code == 302 and "/profile" in r.headers.get("Location", ""):
+            results_http.append((name, "approved"))
+        else:
+            results_http.append((name, r.status_code))
+    except Exception as e:
+        results_http.append((name, f"error:{e}"))
 
 t3=threading.Thread(target=do_http_approve,args=("http-t1",)); t4=threading.Thread(target=do_http_approve,args=("http-t2",))
 t3.start(); t4.start(); t3.join(); t4.join()
-one_ok = sum(1 for r in results_http if r[1] in (200,302))
-one_409 = sum(1 for r in results_http if r[1]==409)
-test(f"HTTP concurrent: one OK ({one_ok}) one 409 ({one_409})", one_ok==1 and one_409==1)
+one_ok = sum(1 for r in results_http if r[1] == "approved")
+one_409 = sum(1 for r in results_http if r[1] == 409)
+print(f"  HTTP results: {results_http}")
+test(f"HTTP concurrent: one approved ({one_ok}) one 409 ({one_409})", one_ok==1 and one_409==1)
 
 conn = get_db(str(db))
 final_bal = conn.execute("SELECT balance_cents FROM users WHERE id=2").fetchone()[0]
@@ -93,11 +111,14 @@ test("HTTP order approved once", final_status["status"]=="approved" and final_st
 
 # =============================================================
 print("\n--- 3. Search access control ---")
-app = create_app(); c = app.test_client()
-c.post("/login", data={"username":"alice","password":"Alice@Secure#Pass456"}, follow_redirects=True)
-r = c.get("/search?keyword=admin"); body = r.data.decode()
-test("Alice search hides admin email", "admin@example.com" not in body)
-test("Alice search hides admin phone", "13800138000" not in body)
+app = __import__("app", fromlist=["create_app"]).create_app()
+c = app.test_client()
+if not login_as(c, "alice", ALICE_PASSWORD):
+    test("Alice login", False, "Alice login failed")
+else:
+    r = c.get("/search?keyword=admin"); body = r.data.decode()
+    test("Alice search hides admin email", "admin@example.com" not in body)
+    test("Alice search hides admin phone", "13800138000" not in body)
 
 from app.users import get_safe_user_info
 info = get_safe_user_info("admin")

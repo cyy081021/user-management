@@ -11,6 +11,8 @@ os.environ["DATABASE_PATH"] = str(ROOT / "data" / "test_csrf_int.db")
 os.environ.pop("WTF_CSRF_ENABLED", None)  # Remove test override to use real CSRF
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
 
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+
 results = []
 def test(name, ok, detail=""):
     m = "OK" if ok else "FAIL"
@@ -45,27 +47,27 @@ tests = [
 ]
 for path, method, data in tests:
     r = c.post(path, data=data)
-    test(f"POST {path} wo/CSRF → 400", r.status_code == 400)
+    test(f"POST {path} wo/CSRF -> 400", r.status_code == 400)
 
 # Login first for protected routes
 p = c.get("/login").data.decode()
 tok = csrf(p)
-r = c.post("/login", data={"username": "admin", "password": "Admin@Strong#Pass789", "csrf_token": tok}, follow_redirects=True)
-test("Login with CSRF → OK", "欢迎回来" in r.data.decode())
+r = c.post("/login", data={"username": "admin", "password": ADMIN_PASSWORD, "csrf_token": tok}, follow_redirects=True)
+test("Login with CSRF -> OK", "欢迎回来" in r.data.decode())
 
 # /recharge needs CSRF
 r = c.post("/recharge", data={"amount": "10"})
-test("POST /recharge wo/CSRF → 400", r.status_code == 400)
+test("POST /recharge wo/CSRF -> 400", r.status_code == 400)
 
 # /admin/approve_recharge needs CSRF
 r = c.post("/admin/approve_recharge", data={"order_id": "1"})
-test("POST /admin/approve_recharge wo/CSRF → 400", r.status_code == 400)
+test("POST /admin/approve_recharge wo/CSRF -> 400", r.status_code == 400)
 
 # /logout with CSRF
 p2 = c.get("/").data.decode()
 tok2 = csrf(p2)
 r = c.post("/logout", data={"csrf_token": tok2}, follow_redirects=True)
-test("Logout with CSRF → OK", "登录" in r.data.decode())
+test("Logout with CSRF -> OK", "登录" in r.data.decode())
 
 if db.exists(): db.unlink()
 print("\n--- Summary ---")

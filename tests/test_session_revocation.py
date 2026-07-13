@@ -11,6 +11,8 @@ os.environ["DATABASE_PATH"] = str(ROOT / "data" / "test_sessrev.db")
 os.environ["WTF_CSRF_ENABLED"] = "0"
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
 
+ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+
 results = []
 def test(name, ok, detail=""):
     m = "OK" if ok else "FAIL"
@@ -31,7 +33,7 @@ from app import create_app
 app = create_app(); c = app.test_client()
 
 # Register user
-c.post("/register", data={"username": "delete_me", "password": "Delete@Pass123!", "email": "d@t.com", "phone": "1111111"}, follow_redirects=True)
+c.post("/register", data={"username": "delete_me", "password": "Delete@Pass123!", "email": "d@t.com", "phone": "1380000111"}, follow_redirects=True)
 # Login
 c.post("/login", data={"username": "delete_me", "password": "Delete@Pass123!"}, follow_redirects=True)
 r = c.get("/", follow_redirects=True)
@@ -54,7 +56,7 @@ r = c.get("/search?keyword=a", follow_redirects=True)
 test("/search rejected after deletion", "欢迎回来" not in r.data.decode())
 
 # Admin deletion test
-c.post("/login", data={"username": "admin", "password": "Admin@Strong#Pass789"}, follow_redirects=True)
+c.post("/login", data={"username": "admin", "password": ADMIN_PASSWORD}, follow_redirects=True)
 conn = get_db(str(db))
 conn.execute("UPDATE users SET role='user' WHERE username='admin'")
 conn.commit()
