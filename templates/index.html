@@ -1,11 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% if page_content %}
-<div class="card">
-    {{ page_content|safe }}
-</div>
-{% elif user %}
+{% if user %}
 <div class="card">
     <h2>欢迎回来，{{ user.username }}！</h2>
 
