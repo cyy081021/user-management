@@ -8,7 +8,7 @@ os.environ.setdefault("ADMIN_PASSWORD", "Admin@Strong#Pass789")
 os.environ.setdefault("ALICE_PASSWORD", "Alice@Secure#Pass456")
 os.environ["FLASK_HTTPS"] = "0"; os.environ["APP_ENV"] = "development"
 os.environ["WTF_CSRF_ENABLED"] = "0"
-os.environ["REDIS_URL"] = "memory://"
+os.environ.setdefault("REDIS_URL", "redis://127.0.0.1:6379/0")
 
 results = []
 def test(name, ok, detail=""):
