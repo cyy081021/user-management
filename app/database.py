@@ -278,7 +278,13 @@ def _step7_record(cursor, current_ver):
 
 
 def init_db(admin_pw=None, alice_pw=None, db_path=None):
-    """便捷入口：迁移 + 同步种子账号"""
+    """便捷入口：迁移 + 同步种子账号。密码参数为 None 时从环境变量读取"""
     if db_path:
         os.environ["DATABASE_PATH"] = db_path
+
+    if admin_pw is None:
+        admin_pw = os.environ.get("ADMIN_PASSWORD", "").strip() or None
+    if alice_pw is None:
+        alice_pw = os.environ.get("ALICE_PASSWORD", "").strip() or None
+
     migrate(admin_pw=admin_pw, alice_pw=alice_pw)
