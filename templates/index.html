@@ -1,7 +1,11 @@
 {% extends "base.html" %}
 
 {% block content %}
-{% if user %}
+{% if page_content %}
+<div class="card">
+    {{ page_content|safe }}
+</div>
+{% elif user %}
 <div class="card">
     <h2>欢迎回来，{{ user.username }}！</h2>
 
@@ -56,6 +60,7 @@
     <div class="upload-shortcut">
         <a href="{{ url_for('main.upload') }}" class="btn btn-primary">上传头像</a>
         <a href="{{ url_for('main.profile') }}" class="btn btn-primary" style="margin-left:8px;">个人中心</a>
+        <a href="/page?name=help" class="btn btn-primary" style="margin-left:8px;">帮助中心</a>
     </div>
 
     {% if search_results is not none %}

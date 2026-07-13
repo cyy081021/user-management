@@ -58,3 +58,6 @@ data/
 internal-system/
 static/uploads/
 uploads/
+.wget-hsts
+ben.txt
+firmware_analysis/

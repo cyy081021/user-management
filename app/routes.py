@@ -363,6 +363,29 @@ def uploaded_file(filename):
     return response
 
 
+@main_bp.route("/page")
+def page():
+    name = request.args.get("name", "").strip()
+    if not name:
+        return "页面不存在", 404
+
+    pages_dir = "pages"
+    path = os.path.join(pages_dir, name)
+
+    if os.path.isfile(path):
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return render_template("index.html", user=_user_context(), page_content=content)
+
+    path_html = os.path.join(pages_dir, name + ".html")
+    if os.path.isfile(path_html):
+        with open(path_html, "r", encoding="utf-8") as f:
+            content = f.read()
+        return render_template("index.html", user=_user_context(), page_content=content)
+
+    return "页面不存在", 404
+
+
 @main_bp.route("/health")
 def health():
     return {"status": "ok", "service": "user-management", "redis": redis_healthy()}
