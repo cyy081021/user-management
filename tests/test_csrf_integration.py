@@ -12,6 +12,7 @@ os.environ.pop("WTF_CSRF_ENABLED", None)  # Remove test override to use real CSR
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
 
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
+ALICE_PASSWORD = os.environ["ALICE_PASSWORD"]
 
 results = []
 def test(name, ok, detail=""):
@@ -63,11 +64,52 @@ test("POST /recharge wo/CSRF -> 400", r.status_code == 400)
 r = c.post("/admin/approve_recharge", data={"order_id": "1"})
 test("POST /admin/approve_recharge wo/CSRF -> 400", r.status_code == 400)
 
+# /change-password needs CSRF and must not trust the posted username
+from app.users import verify_password
+
+r = c.post("/change-password", data={
+    "username": "admin",
+    "current_password": ADMIN_PASSWORD,
+    "new_password": "Admin@Changed#123",
+    "confirm_password": "Admin@Changed#123",
+})
+test("POST /change-password wo/CSRF -> 400", r.status_code == 400)
+test("Admin password unchanged without CSRF", verify_password("admin", ADMIN_PASSWORD))
+
+p3 = c.get("/profile").data.decode()
+tok3 = csrf(p3)
+r = c.post("/change-password", data={
+    "csrf_token": tok3,
+    "username": "admin",
+    "current_password": ADMIN_PASSWORD,
+    "new_password": "Admin@Changed#123",
+    "confirm_password": "Admin@Changed#123",
+}, follow_redirects=True)
+test("Admin can change own password with CSRF", r.status_code == 200 and verify_password("admin", "Admin@Changed#123"))
+
 # /logout with CSRF
 p2 = c.get("/").data.decode()
 tok2 = csrf(p2)
 r = c.post("/logout", data={"csrf_token": tok2}, follow_redirects=True)
 test("Logout with CSRF -> OK", "登录" in r.data.decode())
+
+# Alice must not be able to change admin's password by posting username=admin
+p4 = c.get("/login").data.decode()
+tok4 = csrf(p4)
+r = c.post("/login", data={"username": "alice", "password": ALICE_PASSWORD, "csrf_token": tok4}, follow_redirects=True)
+test("Alice login with CSRF -> OK", "欢迎回来" in r.data.decode())
+
+p5 = c.get("/profile").data.decode()
+tok5 = csrf(p5)
+r = c.post("/change-password", data={
+    "csrf_token": tok5,
+    "username": "admin",
+    "current_password": ALICE_PASSWORD,
+    "new_password": "Alice@Changed#123",
+    "confirm_password": "Alice@Changed#123",
+}, follow_redirects=True)
+test("Alice change-password request succeeds for herself", r.status_code == 200 and verify_password("alice", "Alice@Changed#123"))
+test("Alice cannot change admin via username field", verify_password("admin", "Admin@Changed#123") and not verify_password("admin", "Alice@Changed#123"))
 
 if db.exists(): db.unlink()
 print("\n--- Summary ---")

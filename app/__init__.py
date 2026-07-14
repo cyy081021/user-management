@@ -65,11 +65,7 @@ def create_app():
     if os.environ.get("WTF_CSRF_ENABLED", "1") == "0":
         app.config["WTF_CSRF_ENABLED"] = False
 
-    csrf = CSRFProtect(app)
-
-    # /change-password 路由豁免 CSRF
-    from app.routes import change_password as _cp
-    csrf.exempt(_cp)
+    CSRFProtect(app)
 
     redis_url = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
 

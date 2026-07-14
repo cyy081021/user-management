@@ -14,7 +14,7 @@ from app.users import get_user_by_id, get_user_role
 from app.security import redis_healthy, _check_password_strength
 from app.database import get_db
 from app.upload_handler import validate_upload
-from werkzeug.security import generate_password_hash
+from werkzeug.security import check_password_hash, generate_password_hash
 
 main_bp = Blueprint("main", __name__, template_folder="../templates")
 logger = logging.getLogger(__name__)
@@ -329,25 +329,43 @@ def approve_recharge():
 
 
 @main_bp.route("/change-password", methods=["POST"])
+@login_required
 def change_password():
-    if "user_id" not in session:
-        return redirect("/login")
-
-    username = request.form.get("username", "").strip()
+    current_password = request.form.get("current_password", "")
     new_password = request.form.get("new_password", "")
+    confirm_password = request.form.get("confirm_password", "")
 
-    if not username or not new_password:
-        return "用户名和新密码不能为空", 400
+    if not current_password or not new_password or not confirm_password:
+        return "当前密码、新密码和确认密码不能为空", 400
+
+    if new_password != confirm_password:
+        return "两次输入的新密码不一致", 400
+
+    try:
+        _check_password_strength(new_password, "新密码")
+    except SystemExit:
+        return "密码强度不足（≥12位，含大小写+数字+特殊字符）", 400
 
     conn = get_db()
     try:
+        user = conn.execute(
+            "SELECT id, username, password FROM users WHERE id = ?",
+            (session["user_id"],),
+        ).fetchone()
+        if not user:
+            session.clear()
+            return redirect("/login")
+
+        if not check_password_hash(user["password"], current_password):
+            return "当前密码错误", 403
+
         hashed = generate_password_hash(new_password)
         conn.execute(
-            "UPDATE users SET password = ?, password_migrated = 1 WHERE username = ?",
-            (hashed, username),
+            "UPDATE users SET password = ?, password_migrated = 1 WHERE id = ?",
+            (hashed, user["id"]),
         )
         conn.commit()
-        logger.info("密码已修改: user=%s", username)
+        logger.info("密码已修改: user=%s", user["username"])
     except Exception as e:
         conn.rollback()
         logger.error("修改密码失败: %s", e)
