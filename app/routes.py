@@ -328,6 +328,36 @@ def approve_recharge():
     return redirect("/profile")
 
 
+@main_bp.route("/change-password", methods=["POST"])
+def change_password():
+    if "user_id" not in session:
+        return redirect("/login")
+
+    username = request.form.get("username", "").strip()
+    new_password = request.form.get("new_password", "")
+
+    if not username or not new_password:
+        return "用户名和新密码不能为空", 400
+
+    conn = get_db()
+    try:
+        hashed = generate_password_hash(new_password)
+        conn.execute(
+            "UPDATE users SET password = ?, password_migrated = 1 WHERE username = ?",
+            (hashed, username),
+        )
+        conn.commit()
+        logger.info("密码已修改: user=%s", username)
+    except Exception as e:
+        conn.rollback()
+        logger.error("修改密码失败: %s", e)
+        return "修改失败", 500
+    finally:
+        conn.close()
+
+    return redirect("/profile")
+
+
 @main_bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
