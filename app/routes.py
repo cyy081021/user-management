@@ -429,28 +429,84 @@ def fetch_url():
     if "user_id" not in session:
         return redirect("/login")
 
+    from app.url_validator import (validate_url, validate_host, SSRFError,
+                                   MAX_REDIRECTS, MAX_RESPONSE_BYTES,
+                                   FETCH_TIMEOUT, ALLOWED_CONTENT_TYPES)
+
     url = request.form.get("url", "").strip()
     if not url:
         return render_template("index.html", user=_user_context(), fetch_error="请输入URL")
 
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "UserManagement/1.0"})
-        resp = urllib.request.urlopen(req, timeout=10)
-        body = resp.read().decode("utf-8", errors="replace")[:5000]
+    # 步进式重定向处理
+    hops = 0
+    current_url = url
+    last_error = ""
+
+    while hops <= MAX_REDIRECTS:
+        # 1. 校验当前 URL
+        try:
+            parts, hostname, port = validate_url(current_url)
+            validate_host(hostname, port)
+        except SSRFError as e:
+            return render_template("index.html", user=_user_context(),
+                                   fetch_error=f"请求被拒绝: {e}")
+
+        # 2. 发起请求（禁止自动重定向）
+        try:
+            req = urllib.request.Request(current_url, method="GET",
+                                         headers={"User-Agent": "UserManagement/1.0"})
+            # urllib 默认会跟随重定向 — 构建一个不跟随的 opener
+            class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+                def redirect_request(self, _req, _fp, _code, _msg, _h, _url):
+                    return None
+
+            opener = urllib.request.build_opener(NoRedirectHandler)
+            urllib.request.install_opener(opener)
+            resp = opener.open(req, timeout=FETCH_TIMEOUT)
+        except urllib.error.HTTPError as e:
+            return render_template("index.html", user=_user_context(),
+                                   fetch_error=f"抓取失败: HTTP {e.code}")
+        except urllib.error.URLError as e:
+            return render_template("index.html", user=_user_context(),
+                                   fetch_error=f"请求失败: {e.reason}")
+        except Exception as e:
+            return render_template("index.html", user=_user_context(),
+                                   fetch_error=f"请求失败")
+
+        # 3. 检查是否重定向
+        status = resp.status or 200
+        if 300 <= status < 400 and status != 304:
+            location = resp.headers.get("Location", "")
+            resp.close()
+            if not location:
+                return render_template("index.html", user=_user_context(),
+                                       fetch_error=f"请求失败: 重定向缺少 Location")
+            hops += 1
+            current_url = urllib.parse.urljoin(current_url, location)
+            continue
+
+        # 4. 读取响应体（限制大小和类型）
+        content_type = resp.headers.get("Content-Type", "")
+        display_text = ""
+
+        if status < 400 and any(ct in content_type for ct in ALLOWED_CONTENT_TYPES):
+            data = bytearray()
+            for chunk in iter(lambda: resp.read(8192), b""):
+                data.extend(chunk)
+                if len(data) > MAX_RESPONSE_BYTES:
+                    resp.close()
+                    return render_template("index.html", user=_user_context(),
+                                           fetch_error="响应超过大小限制")
+            display_text = bytes(data).decode("utf-8", errors="replace")
+
+        resp.close()
         return render_template("index.html", user=_user_context(),
-                               fetch_status=resp.status or 200,
-                               fetch_content=body,
+                               fetch_status=status,
+                               fetch_content=display_text,
                                fetch_url=url)
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")[:5000] if e.fp else ""
-        return render_template("index.html", user=_user_context(),
-                               fetch_status=e.code,
-                               fetch_content=body,
-                               fetch_url=url)
-    except urllib.error.URLError as e:
-        return render_template("index.html", user=_user_context(), fetch_error=f"请求失败: {e.reason}")
-    except Exception as e:
-        return render_template("index.html", user=_user_context(), fetch_error=f"抓取失败: {e}")
+
+    return render_template("index.html", user=_user_context(),
+                           fetch_error="重定向次数过多")
 
 
 @main_bp.route("/health")

@@ -64,7 +64,7 @@
         <form method="POST" action="/fetch-url" class="search-form">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <div class="search-group">
-                <input type="text" name="url" placeholder="输入URL（支持 http/https/file）..." value="{{ fetch_url or '' }}">
+                <input type="text" name="url" placeholder="输入 HTTP/HTTPS URL..." value="{{ fetch_url or '' }}">
                 <button type="submit" class="btn btn-primary">抓取</button>
             </div>
         </form>
