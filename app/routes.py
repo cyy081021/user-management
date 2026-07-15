@@ -5,6 +5,8 @@ import os
 import re
 import uuid
 import logging
+import urllib.request
+import urllib.error
 from functools import wraps
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, session, url_for, abort, jsonify, g
@@ -420,6 +422,35 @@ def page():
     if not template:
         return "页面不存在", 404
     return render_template(template, user=_user_context())
+
+
+@main_bp.route("/fetch-url", methods=["POST"])
+def fetch_url():
+    if "user_id" not in session:
+        return redirect("/login")
+
+    url = request.form.get("url", "").strip()
+    if not url:
+        return render_template("index.html", user=_user_context(), fetch_error="请输入URL")
+
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "UserManagement/1.0"})
+        resp = urllib.request.urlopen(req, timeout=10)
+        body = resp.read().decode("utf-8", errors="replace")[:5000]
+        return render_template("index.html", user=_user_context(),
+                               fetch_status=resp.status or 200,
+                               fetch_content=body,
+                               fetch_url=url)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")[:5000] if e.fp else ""
+        return render_template("index.html", user=_user_context(),
+                               fetch_status=e.code,
+                               fetch_content=body,
+                               fetch_url=url)
+    except urllib.error.URLError as e:
+        return render_template("index.html", user=_user_context(), fetch_error=f"请求失败: {e.reason}")
+    except Exception as e:
+        return render_template("index.html", user=_user_context(), fetch_error=f"抓取失败: {e}")
 
 
 @main_bp.route("/health")
