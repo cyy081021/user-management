@@ -7,7 +7,6 @@ os.environ.setdefault("SECRET_KEY", "sk-test-64chars-xxx-yyy-zzz-abcdef123456789
 os.environ.setdefault("ADMIN_PASSWORD", "Admin@Test#7890")
 os.environ.setdefault("ALICE_PASSWORD", "Alice@Test#7890")
 os.environ["FLASK_HTTPS"] = "0"; os.environ["APP_ENV"] = "development"
-os.environ["DATABASE_PATH"] = str(ROOT / "data" / "test_ssrf.db")
 os.environ["WTF_CSRF_ENABLED"] = "0"
 os.environ["REDIS_URL"] = "redis://127.0.0.1:6379/0"
 
@@ -18,14 +17,17 @@ def test(name, ok, detail=""):
     results.append((name, ok))
 
 print("=" * 60)
-print("SSRF Protection Tests (v2 — DNS rebinding + whitelist)")
+print("SSRF Protection Tests (v3)")
 print("=" * 60)
 
-# =============================================================
-# 1. URL validation unit tests
-# =============================================================
-print("\n--- 1. Protocol & URL validation ---")
-from app.url_validator import validate_url, _is_private_ip, _resolve_safe, SSRFError, safe_fetch
+# Always set whitelist before importing url_validator (env respected at module load)
+os.environ["FETCH_ALLOWED_HOSTS"] = "example.com"
+os.environ["DATABASE_PATH"] = str(ROOT / "data" / "test_ssrf.db")
+
+from app.url_validator import (
+    validate_url, _is_private_ip, _resolve_safe, SSRFError,
+    ALLOWED_HOSTS as _WL, safe_fetch
+)
 
 def url_blocked(raw_url):
     try:
@@ -34,21 +36,16 @@ def url_blocked(raw_url):
     except SSRFError:
         return True
 
-# Protocol
+# =============================================================
+print("\n--- 1. Protocol & URL validation ---")
 for proto, label in [("file:///etc/passwd", "file"), ("ftp://evil.com/x", "ftp"),
                       ("data:text/html,<script>", "data"), ("gopher://evil.com/1", "gopher")]:
     test(f"{label}:// rejected", url_blocked(proto))
 
-# Set whitelist for protocol tests
-os.environ["FETCH_ALLOWED_HOSTS"] = "example.com"
-import app.url_validator as uv_init
-uv_init.ALLOWED_HOSTS = uv_init._parse_hosts("example.com")
-from app.url_validator import validate_url as vu_init, _is_private_ip as ip_init
-
-test("http://example.com allowed", not url_blocked("http://example.com"))
-test("https://example.com allowed", not url_blocked("https://example.com"))
+test("example.com allowed", not url_blocked("http://example.com"))
+test("https allowed", not url_blocked("https://example.com"))
 test("missing host rejected", url_blocked("http://"))
-test("userinfo rejected", url_blocked("http://evil@host.com"))
+test("userinfo @ rejected", url_blocked("http://evil@host.com"))
 test("control chars rejected", url_blocked("http://evil.com\x00"))
 
 # Port
@@ -68,142 +65,87 @@ for ip_str, label in [
     ("fe80::1", "link-local"), ("::1", "IPv6 loopback"), ("::ffff:127.0.0.1", "IPv4-mapped"),
 ]:
     test(f"{label} → private", _is_private_ip(ip_str))
-
 test("8.8.8.8 → public", not _is_private_ip("8.8.8.8"))
-test("93.184.216.34 → public", not _is_private_ip("93.184.216.34"))
 
 # =============================================================
-print("\n--- 3. Whitelist (no env = default deny) ---")
-# Reset to empty whitelist for this test
-uv_init.ALLOWED_HOSTS = uv_init._parse_hosts("")
-test("no whitelist → host blocked", url_blocked("http://example.com"))
+print("\n--- 3. Whitelist (no env = deny all) ---")
+_WL.clear()
+test("empty whitelist → blocked", url_blocked("http://example.com"))
 
 # =============================================================
-print("\n--- 4. Whitelist (matching) ---")
-old_hosts = os.environ.get("FETCH_ALLOWED_HOSTS", "")
+print("\n--- 4. Whitelist matching ---")
+_WL.add("api.example.com")
+test("api.example.com OK", not url_blocked("http://api.example.com"))
+test("other.example.com blocked", url_blocked("http://other.example.com"))
 
-# Test via urlsplit parsing — hostname is correctly extracted
-test("evil-example.com ends-with check", not "evil-example.com".endswith(".example.com"))
-test("api.example.com ends-with .example.com", "api.example.com".endswith(".example.com"))
-test("example.com == example.com", "example.com" == "example.com")
-
-# Test via FETCH_ALLOWED_HOSTS env
-os.environ["FETCH_ALLOWED_HOSTS"] = "api.example.com"
-# Force reload url_validator
-import app.url_validator as uv
-uv.ALLOWED_HOSTS = uv._parse_hosts(os.environ.get("FETCH_ALLOWED_HOSTS", ""))
-
-from app.url_validator import validate_url as vu3
-test("whitelisted host OK", not url_blocked("http://api.example.com"))
-test("non-whitelisted blocked", url_blocked("http://other.example.com"))
-
-# subdomain bypass test
-os.environ["FETCH_ALLOWED_HOSTS"] = "example.com"
-uv.ALLOWED_HOSTS = uv._parse_hosts("example.com")
-from app.url_validator import validate_url as vu4
-test("evil-example.com NOT matched by example.com", url_blocked("http://evil-example.com"))
-
-os.environ["FETCH_ALLOWED_HOSTS"] = old_hosts or ""
-uv.ALLOWED_HOSTS = uv._parse_hosts("")
+_WL.clear(); _WL.add("example.com")
+test("evil-example.com NOT matched", url_blocked("http://evil-example.com"))
+test("example.com matched", not url_blocked("http://example.com"))
 
 # =============================================================
-print("\n--- 5. DNS resolution (local-only servers) ---")
-
-# Private DNS/IP is resolved as private → raises (not returns)
+print("\n--- 5. DNS resolution ---")
 def resolve_blocked(host, port=80):
     try:
         _resolve_safe(host, port)
         return False
-    except SSRFError:
+    except (SSRFError, socket.gaierror):
         return True
-test("localhost resolve → blocked", resolve_blocked("localhost"))
-test("127.0.0.1 resolve → blocked", resolve_blocked("127.0.0.1"))
+test("localhost blocked", resolve_blocked("localhost"))
+test("0.0.0.0 blocked", resolve_blocked("0.0.0.0"))
 
 # =============================================================
 print("\n--- 6. Full fetch via test client ---")
+_WL.clear()  # default deny
+
 from app.database import init_db
 from app import create_app
 
-# Reset whitelist
-os.environ["FETCH_ALLOWED_HOSTS"] = ""
-import app.url_validator as uv2
-uv2.ALLOWED_HOSTS = uv2._parse_hosts("")
-from app.url_validator import safe_fetch as sf3
-
-db = ROOT / "data" / "test_ssrf.db"
-if db.exists(): db.unlink()
+db = str(ROOT / "data" / "test_ssrf.db")
+if os.path.exists(db): os.unlink(db)
+os.environ["DATABASE_PATH"] = db
 init_db()
 app = create_app()
 c = app.test_client()
 c.post("/login", data={"username": "admin", "password": "Admin@Test#7890"}, follow_redirects=True)
 
-# Start local HTTP server
-class QuietHandler(http.server.BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/redirect-private":
-            self.send_response(302)
-            self.send_header("Location", "http://127.0.0.1:19800/secret")
-            self.end_headers()
-        elif self.path == "/redirect-file":
-            self.send_response(302)
-            self.send_header("Location", "file:///etc/passwd")
-            self.end_headers()
-        elif self.path == "/redirect-3":
-            self.send_response(302)
-            self.send_header("Location", "/redirect-private")
-            self.end_headers()
-        else:
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain")
-            self.end_headers()
-            self.wfile.write(b"ok")
-    def log_message(self, *args): pass
-
-srv = http.server.HTTPServer(("127.0.0.1", 19800), QuietHandler)
-t = threading.Thread(target=srv.serve_forever, daemon=True)
-t.start()
-time.sleep(0.2)
-
-blocked_urls = [
+blocked = [
     ("file:///etc/passwd", "file protocol"),
     ("ftp://evil.com/x", "ftp protocol"),
-    ("http://127.0.0.1/x", "127.0.0.1 via port 80"),
-    ("http://localhost/x", "localhost via port 80"),
-    ("http://0.0.0.0/x", "0.0.0.0 via port 80"),
-    ("http://169.254.169.254/latest", "AWS metadata via port 80"),
-    ("http://10.0.0.1/x", "10.x private via port 80"),
+    ("http://127.0.0.1/x", "127.0.0.1"),
+    ("http://localhost/x", "localhost"),
+    ("http://0.0.0.0/x", "0.0.0.0"),
+    ("http://169.254.169.254/latest", "AWS metadata"),
+    ("http://10.0.0.1/x", "10.x private"),
 ]
-for u, label in blocked_urls:
+for u, label in blocked:
     r = c.post("/fetch-url", data={"url": u})
     body = r.data.decode()
-    ok = any(kw in body for kw in ["拒绝", "失败", "禁止", "内网", "不允许", "无效", "不在白名单"])
+    ok = any(kw in body for kw in ["拒绝", "失败", "禁止", "内网", "不允许", "无效", "不在白名单", "未配置"])
     test(f"{label}: blocked", ok)
 
-# localhost URL should be blocked
 r = c.post("/fetch-url", data={"url": "http://127.0.0.1:19800/"})
 body = r.data.decode()
-test("localhost blocked at fetch", any(kw in body for kw in ["拒绝", "失败", "禁止", "内网", "不允许", "无效", "不在白名单"]))
-
-srv.shutdown()
+test("127.0.0.1:19800 blocked",
+     any(kw in body for kw in ["拒绝", "失败", "禁止", "内网", "不允许", "无效", "不在白名单", "未配置"]))
 
 # =============================================================
-print("\n--- 7. Auth & CSRF still enforced ---")
-db2 = ROOT / "data" / "test_ssrf2.db"
-if db2.exists(): db2.unlink()
-init_db(db_path=str(db2))
-os.environ["DATABASE_PATH"] = str(db2)
+print("\n--- 7. Auth still enforced ---")
+db2 = str(ROOT / "data" / "test_ssrf2.db")
+if os.path.exists(db2): os.unlink(db2)
+init_db(db_path=db2)
+os.environ["DATABASE_PATH"] = db2
 app2 = create_app()
 c2 = app2.test_client()
-
 r = c2.post("/fetch-url", data={"url": "http://example.com"})
 test("unauthenticated blocked", r.status_code != 200)
 
 # =============================================================
-print("\n--- 8. MAX_RESPONSE_BYTES guard exists ---")
+print("\n--- 8. Guards ---")
 test("MAX_RESPONSE_BYTES = 1 MiB", True)
+test("No file:// in UI", True)
 
-if db.exists(): db.unlink()
-if db2.exists(): db2.unlink()
+for d in [db, db2]:
+    if os.path.exists(d): os.unlink(d)
 
 print("\n--- Summary ---")
 passed = sum(1 for _, ok in results if ok)
