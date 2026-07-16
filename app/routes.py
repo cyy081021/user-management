@@ -5,8 +5,8 @@ import os
 import re
 import uuid
 import logging
+import ipaddress
 import subprocess
-import platform
 from functools import wraps
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, session, url_for, abort, jsonify, g
@@ -456,21 +456,38 @@ def ping():
         return redirect("/login")
 
     if request.method == "POST":
-        ip = request.form.get("ip", "").strip()
-        if not ip:
-            return render_template("ping.html", error="请输入 IP 地址")
+        raw_ip = request.form.get("ip", "").strip()
+        if not raw_ip:
+            return render_template("ping.html", error="请输入 IP 地址"), 400
+
+        # 严格校验：只允许合法 IPv4/IPv6，拒绝命令注入字符
+        try:
+            valid_ip = ipaddress.ip_address(raw_ip)
+        except ValueError:
+            return render_template("ping.html", error="无效的 IP 地址"), 400
+
+        # 序列化为规范地址后执行 ping
+        ip_str = str(valid_ip)
+        # 拒绝含注入字符的原始输入（. 和 : 合法，其他危险字符一律拦截）
+        dangerous = set(";&|`$()\n\r")
+        if set(raw_ip) & dangerous:
+            return render_template("ping.html", error="无效的 IP 地址"), 400
+
+        cmd = ["ping", "-c", "3", ip_str]
 
         try:
-            cmd = f"ping -c 3 {ip}"
-            output = subprocess.check_output(cmd, shell=True, timeout=30, stderr=subprocess.STDOUT)
-            return render_template("ping.html", result=output.decode("utf-8", errors="replace"), ip=ip)
+            output = subprocess.check_output(cmd, shell=False, timeout=10, stderr=subprocess.STDOUT)
+            result = output.decode("utf-8", errors="replace")
+            if len(result) > 10000:
+                result = result[:10000] + "\n...输出已截断"
+            return render_template("ping.html", result=result, ip=ip_str)
         except subprocess.CalledProcessError as e:
-            return render_template("ping.html", result=e.output.decode("utf-8", errors="replace"), ip=ip,
-                                   error="命令执行失败")
+            result = (e.output or b"").decode("utf-8", errors="replace")[:5000]
+            return render_template("ping.html", result=result, ip=ip_str, error="Ping 失败")
         except subprocess.TimeoutExpired:
             return render_template("ping.html", error="执行超时")
-        except Exception as e:
-            return render_template("ping.html", error=f"执行失败: {e}")
+        except Exception:
+            return render_template("ping.html", error="执行失败")
 
     return render_template("ping.html")
 

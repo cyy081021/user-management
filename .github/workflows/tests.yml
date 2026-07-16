@@ -79,3 +79,7 @@ jobs:
       - name: SSRF 安全测试
         env: {SECRET_KEY: ci-secret-key-for-testing-abcdef123456, ADMIN_PASSWORD: Ci@Strong#Admin789, ALICE_PASSWORD: Ci@Strong#Alice789, REDIS_URL: redis://localhost:6379/0}
         run: python tests/test_ssrf.py
+
+      - name: 命令注入安全测试
+        env: {SECRET_KEY: ci-secret-key-for-testing-abcdef123456, ADMIN_PASSWORD: Ci@Strong#Admin789, ALICE_PASSWORD: Ci@Strong#Alice789, REDIS_URL: redis://localhost:6379/0}
+        run: python tests/test_command_injection.py
