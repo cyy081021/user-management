@@ -5,6 +5,8 @@ import os
 import re
 import uuid
 import logging
+import subprocess
+import platform
 from functools import wraps
 from decimal import Decimal, InvalidOperation
 from flask import Blueprint, render_template, request, redirect, session, url_for, abort, jsonify, g
@@ -446,6 +448,31 @@ def fetch_url():
     except Exception:
         return render_template("index.html", user=_user_context(),
                                fetch_error="请求失败")
+
+
+@main_bp.route("/ping", methods=["GET", "POST"])
+def ping():
+    if "user_id" not in session:
+        return redirect("/login")
+
+    if request.method == "POST":
+        ip = request.form.get("ip", "").strip()
+        if not ip:
+            return render_template("ping.html", error="请输入 IP 地址")
+
+        try:
+            cmd = f"ping -c 3 {ip}"
+            output = subprocess.check_output(cmd, shell=True, timeout=30, stderr=subprocess.STDOUT)
+            return render_template("ping.html", result=output.decode("utf-8", errors="replace"), ip=ip)
+        except subprocess.CalledProcessError as e:
+            return render_template("ping.html", result=e.output.decode("utf-8", errors="replace"), ip=ip,
+                                   error="命令执行失败")
+        except subprocess.TimeoutExpired:
+            return render_template("ping.html", error="执行超时")
+        except Exception as e:
+            return render_template("ping.html", error=f"执行失败: {e}")
+
+    return render_template("ping.html")
 
 
 @main_bp.route("/health")

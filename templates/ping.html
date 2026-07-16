@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card ping-card">
+    <h2>Ping 网络诊断</h2>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    <form method="POST" action="/ping" class="ping-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <div class="form-group">
+            <label for="ip">目标 IP 地址</label>
+            <input type="text" id="ip" name="ip" placeholder="输入 IP 地址" value="{{ ip or '' }}" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Ping</button>
+    </form>
+
+    {% if result %}
+    <div class="ping-result" style="margin-top:20px;">
+        <h4>执行结果</h4>
+        <pre style="background:#1a1a1a;color:#00ff00;padding:12px;border-radius:6px;overflow-x:auto;white-space:pre-wrap;font-family:monospace;font-size:13px;">{{ result }}</pre>
+    </div>
+    {% endif %}
+
+    <a href="{{ url_for('main.index') }}" class="btn" style="background:#ccc;color:#333;margin-top:16px;">返回首页</a>
+</div>
+{% endblock %}
