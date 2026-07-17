@@ -75,19 +75,25 @@ conn = get_db(str(db)); conn.execute("UPDATE recharge_orders SET status='pending
 conn.execute("UPDATE users SET balance_cents=0 WHERE id=2"); conn.commit(); conn.close()
 
 os.environ["DATABASE_PATH"] = str(db)
+
+# Create ONE app before threads — avoid concurrent redis import race
+from app.database import get_db as _gdb2
+shared_app = __import__("app", fromlist=["create_app"]).create_app()
+barrier = threading.Barrier(2)
 results_http = []
 
 def do_http_approve(name):
     try:
-        app2 = __import__("app", fromlist=["create_app"]).create_app()
-        c2 = app2.test_client()
-        # Login with CI-compatible password
+        c2 = shared_app.test_client()
         if not login_as(c2, "admin", ADMIN_PASSWORD):
             results_http.append((name, "login_failed"))
             return
+        # Get CSRF token from profile page
         p = c2.get("/profile").data.decode()
-        r = c2.post("/admin/approve_recharge", data={"order_id":"1","csrf_token":csrf(p)})
-        # 严格判断：成功=302到/profile，409=冲突
+        tok = csrf(p)
+        # Wait for both threads to be ready, then fire simultaneously
+        barrier.wait()
+        r = c2.post("/admin/approve_recharge", data={"order_id":"1","csrf_token":tok})
         if r.status_code == 302 and "/profile" in r.headers.get("Location", ""):
             results_http.append((name, "approved"))
         else:
