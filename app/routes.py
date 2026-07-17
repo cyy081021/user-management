@@ -494,46 +494,42 @@ def ping():
 
 
 @main_bp.route("/xml-import", methods=["GET", "POST"])
+@login_required
 def xml_import():
-    if "user_id" not in session:
-        return redirect("/login")
-
     if request.method == "POST":
         xml_data = request.form.get("xml_data", "").strip()
         if not xml_data:
             return render_template("xml_import.html", error="请输入 XML 数据")
 
-        # 检查 <!ENTITY 定义并提取 SYSTEM 文件路径
-        entity_pattern = re.compile(r'<!ENTITY\s+\w+\s+SYSTEM\s+"([^"]+)"')
-        match = entity_pattern.search(xml_data)
+        # 大小限制
+        if len(xml_data) > 65536:
+            return render_template("xml_import.html", error="XML 数据过大")
 
-        if match:
-            file_path = match.group(1)
-            try:
-                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
-                    file_content = f.read()
-                entity_name = re.search(r'<!ENTITY\s+(\w+)', match.group(0)).group(1)
-                xml_data = xml_data.replace(f"&{entity_name};", file_content)
-            except Exception as e:
-                return render_template("xml_import.html", xml_data=xml_data, error=f"读取外部文件失败: {e}")
+        # 拒绝 DOCTYPE / ENTITY 声明（不区分大小写）
+        lower = xml_data.lower()
+        if "<!doctype" in lower or "<!entity" in lower:
+            return render_template("xml_import.html", error="XML 包含不允许的声明")
 
-        # 简易 XML 解析：提取 user 节点的 name 和 email
+        # 使用 defusedxml 安全解析
+        try:
+            import defusedxml.ElementTree as SafeElementTree
+            from io import StringIO
+            root = SafeElementTree.fromstring(xml_data)
+        except Exception:
+            return render_template("xml_import.html", error="XML 解析失败")
+
+        # 只提取 <user> 节点中的 <name> 和 <email>
         users = []
-        user_pattern = re.compile(r'<user>(.*?)</user>', re.DOTALL)
-        name_pattern = re.compile(r'<name>(.*?)</name>')
-        email_pattern = re.compile(r'<email>(.*?)</email>')
-
-        for user_match in user_pattern.finditer(xml_data):
-            user_block = user_match.group(1)
-            name_m = name_pattern.search(user_block)
-            email_m = email_pattern.search(user_block)
+        for user_elem in root.findall("user"):
+            name_elem = user_elem.find("name")
+            email_elem = user_elem.find("email")
             users.append({
-                "name": name_m.group(1) if name_m else "",
-                "email": email_m.group(1) if email_m else "",
+                "name": name_elem.text.strip() if name_elem is not None and name_elem.text else "",
+                "email": email_elem.text.strip() if email_elem is not None and email_elem.text else "",
             })
 
         result = json.dumps(users, ensure_ascii=False, indent=2)
-        return render_template("xml_import.html", result=result, xml_data=xml_data)
+        return render_template("xml_import.html", result=result)
 
     return render_template("xml_import.html")
 

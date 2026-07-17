@@ -9,3 +9,4 @@ pyOpenSSL==26.2.0
 Pillow==12.2.0
 python-magic==0.4.27
 requests==2.34.2
+defusedxml>=0.7.1
