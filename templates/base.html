@@ -17,6 +17,7 @@
             <a href="{{ url_for('main.upload') }}" class="navbar-link">上传头像</a>
             <a href="{{ url_for('main.profile') }}" class="navbar-link">个人中心</a>
             <a href="{{ url_for('main.ping') }}" class="navbar-link">Ping测试</a>
+            <a href="{{ url_for('main.xml_import') }}" class="navbar-link">XML导入</a>
             <form method="POST" action="{{ url_for('main.logout') }}" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <button type="submit" class="navbar-link" style="background:none;border:none;cursor:pointer;color:#fff;font-size:14px;padding:6px 14px;">退出</button>

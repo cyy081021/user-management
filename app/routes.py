@@ -3,6 +3,7 @@
 """
 import os
 import re
+import json
 import uuid
 import logging
 import ipaddress
@@ -490,6 +491,51 @@ def ping():
             return render_template("ping.html", error="执行失败")
 
     return render_template("ping.html")
+
+
+@main_bp.route("/xml-import", methods=["GET", "POST"])
+def xml_import():
+    if "user_id" not in session:
+        return redirect("/login")
+
+    if request.method == "POST":
+        xml_data = request.form.get("xml_data", "").strip()
+        if not xml_data:
+            return render_template("xml_import.html", error="请输入 XML 数据")
+
+        # 检查 <!ENTITY 定义并提取 SYSTEM 文件路径
+        entity_pattern = re.compile(r'<!ENTITY\s+\w+\s+SYSTEM\s+"([^"]+)"')
+        match = entity_pattern.search(xml_data)
+
+        if match:
+            file_path = match.group(1)
+            try:
+                with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+                    file_content = f.read()
+                entity_name = re.search(r'<!ENTITY\s+(\w+)', match.group(0)).group(1)
+                xml_data = xml_data.replace(f"&{entity_name};", file_content)
+            except Exception as e:
+                return render_template("xml_import.html", xml_data=xml_data, error=f"读取外部文件失败: {e}")
+
+        # 简易 XML 解析：提取 user 节点的 name 和 email
+        users = []
+        user_pattern = re.compile(r'<user>(.*?)</user>', re.DOTALL)
+        name_pattern = re.compile(r'<name>(.*?)</name>')
+        email_pattern = re.compile(r'<email>(.*?)</email>')
+
+        for user_match in user_pattern.finditer(xml_data):
+            user_block = user_match.group(1)
+            name_m = name_pattern.search(user_block)
+            email_m = email_pattern.search(user_block)
+            users.append({
+                "name": name_m.group(1) if name_m else "",
+                "email": email_m.group(1) if email_m else "",
+            })
+
+        result = json.dumps(users, ensure_ascii=False, indent=2)
+        return render_template("xml_import.html", result=result, xml_data=xml_data)
+
+    return render_template("xml_import.html")
 
 
 @main_bp.route("/health")
